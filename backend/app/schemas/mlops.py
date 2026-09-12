@@ -83,3 +83,43 @@ class ModelRunSummary(BaseModel):
 class ModelRollbackRequest(BaseModel):
     model_type: ModelType
     target_version: str = Field(..., description="Model version string to rollback to, e.g. 'v1.0.0-solar-xgb'")
+
+class RetrainingStatusEnum(str, Enum):
+    IDLE = "IDLE"
+    TRAINING = "TRAINING"
+    EVALUATING = "EVALUATING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+class RetrainingTriggerRequest(BaseModel):
+    model_type: str = Field(default="both", description="'solar', 'wind', or 'both'")
+    force_promote: bool = Field(default=False, description="Promote challenger even if marginal improvement")
+    sample_days: int = Field(default=90, ge=30, le=365, description="Historical days window for training")
+    n_estimators: Optional[int] = Field(default=200, ge=50, le=500)
+    learning_rate: Optional[float] = Field(default=0.05, ge=0.01, le=0.3)
+    max_depth: Optional[int] = Field(default=6, ge=3, le=10)
+
+class RetrainingExecutionResult(BaseModel):
+    model_type: str
+    champion_version: str
+    challenger_version: str
+    promoted: bool
+    promotion_reason: str
+    champion_metrics: Dict[str, float]
+    challenger_metrics: Dict[str, float]
+    comparisons: List[ChampionChallengerComparison]
+    artifact_path: Optional[str] = None
+    completed_at: datetime
+
+class RetrainingHistoryItem(BaseModel):
+    job_id: str
+    model_type: str
+    triggered_by: str
+    status: str
+    promoted: bool
+    champion_version: str
+    challenger_version: str
+    challenger_metrics: Dict[str, float]
+    promotion_reason: str
+    timestamp: datetime
+
