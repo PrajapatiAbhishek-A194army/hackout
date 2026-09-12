@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # FastAPI Machine Learning & Data Ingestion Backend
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: renewable-forecasting-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=AI-Powered Renewable Generation Forecasting Platform
+      - ENVIRONMENT=production
+      - DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=sqlite:///./renewable_dev.db
+      - SECRET_KEY=hackout_renewable_production_super_secret_jwt_key_2026_secure
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:80", "http://127.0.0.1:3000", "http://localhost"]
+      - WEBSOCKET_TELEMETRY_INTERVAL_SECONDS=1.0
+    volumes:
+      - backend-models:/app/trained_models
+      - backend-reports:/app/reports_archive
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - platform-network
+
+  # ============================================================================
+  # React SPA & High-Performance Nginx Reverse Proxy
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: renewable-forecasting-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - platform-network
+
+volumes:
+  backend-models:
+    name: renewable-backend-models
+  backend-reports:
+    name: renewable-backend-reports
+
+networks:
+  platform-network:
+    name: renewable-platform-network
+    driver: bridge
