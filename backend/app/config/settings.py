@@ -1,7 +1,20 @@
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
+
+# Calculate workspace directories
+# settings.py is in backend/app/config/
+CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_DIR = os.path.dirname(CONFIG_DIR)
+BACKEND_DIR = os.path.dirname(APP_DIR)
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+
+# Priority: root .env first, then backend .env
+env_files = [
+    os.path.join(ROOT_DIR, ".env"),
+    os.path.join(BACKEND_DIR, ".env")
+]
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Renewable Generation Forecasting Platform"
@@ -34,7 +47,7 @@ class Settings(BaseSettings):
         return ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"]
 
     model_config = SettingsConfigDict(
-        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"),
+        env_file=env_files,
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore"

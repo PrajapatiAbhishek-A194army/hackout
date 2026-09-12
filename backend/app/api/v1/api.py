@@ -1,5 +1,12 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import health
+from app.api.v1.endpoints import health, plants, regions, weather, forecasts, alerts
 
 api_router = APIRouter()
+
+# Register core endpoint routers
 api_router.include_router(health.router, tags=["Health & Status"])
+api_router.include_router(plants.router, prefix="/plants", tags=["Renewable Plants"])
+api_router.include_router(regions.router, prefix="/regions", tags=["Grid Regions & States"])
+api_router.include_router(weather.router, prefix="/weather", tags=["Weather Telemetry"])
+api_router.include_router(forecasts.router, prefix="/forecast", tags=["Generation Forecasts"])
+api_router.include_router(alerts.router, prefix="/alerts", tags=["Grid Alerts & Recommendations"])
