@@ -1,5 +1,8 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import health, plants, regions, weather, forecasts, alerts, pipeline_endpoints, features_endpoints
+from app.api.v1.endpoints import (
+    health, plants, regions, weather, forecasts, alerts,
+    pipeline_endpoints, features_endpoints, solar_endpoints
+)
 
 api_router = APIRouter()
 
@@ -12,5 +15,7 @@ api_router.include_router(forecasts.router, prefix="/forecast", tags=["Generatio
 api_router.include_router(alerts.router, prefix="/alerts", tags=["Grid Alerts & Recommendations"])
 api_router.include_router(pipeline_endpoints.router, prefix="/pipeline", tags=["Data Pipeline & Ingestion"])
 api_router.include_router(features_endpoints.router, prefix="/features", tags=["Feature Engineering"])
+api_router.include_router(solar_endpoints.router, prefix="/solar", tags=["Solar Forecasting (XGBoost)"])
+
 
 
