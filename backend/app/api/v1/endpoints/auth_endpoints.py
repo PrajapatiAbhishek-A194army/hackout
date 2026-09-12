@@ -10,7 +10,7 @@ from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.schemas.auth import (
     UserLoginRequest, TokenResponse, UserResponse,
-    UserCreateRequest, AuditLogResponse, AuditLogListResponse
+    UserCreateRequest, UserSignupRequest, AuditLogResponse, AuditLogListResponse
 )
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.dependencies import get_current_user, require_roles
@@ -20,45 +20,67 @@ logger = logging.getLogger("backend.api.auth")
 
 router = APIRouter()
 
-# Default accounts seeded if DB has 0 users
+def normalize_role(role_raw: str) -> str:
+    r = (role_raw or "").strip().lower().replace("_", "-")
+    if r in ["operator", "grid-operator", "grid_operator", "sldc", "nldc"]:
+        return "grid-operator"
+    if r in ["utility", "discom", "procurement"]:
+        return "utility"
+    if r in ["plant-owner", "plant_owner", "ipp", "generator"]:
+        return "plant-owner"
+    if r in ["energy-trader", "energy_trader", "trader", "analyst"]:
+        return "energy-trader"
+    if r in ["admin", "administrator"]:
+        return "admin"
+    return "grid-operator"
+
+# Default accounts seeded for quick role switching and testing
 DEFAULT_SEEDS = [
-    {
-        "email": "admin@gridflow.ai",
-        "password": "AdminPassword@123",
-        "full_name": "Chief Grid Administrator",
-        "role": "admin",
-        "organization": "National Load Despatch Centre (NLDC)",
-        "is_superuser": True
-    },
     {
         "email": "operator@gridflow.ai",
         "password": "OperatorPassword@123",
-        "full_name": "Senior Dispatch Operator",
-        "role": "operator",
-        "organization": "Northern Regional SLDC",
+        "full_name": "Senior Grid Operator (NLDC)",
+        "role": "grid-operator",
+        "organization": "National Load Despatch Centre (NLDC)",
         "is_superuser": False
     },
     {
-        "email": "analyst@gridflow.ai",
-        "password": "AnalystPassword@123",
-        "full_name": "Renewable Market Analyst",
-        "role": "analyst",
-        "organization": "Central Electricity Authority (CEA)",
+        "email": "utility@gridflow.ai",
+        "password": "UtilityPassword@123",
+        "full_name": "Chief Procurement Officer",
+        "role": "utility",
+        "organization": "State Electricity Distribution Co. (DISCOM)",
         "is_superuser": False
     },
     {
-        "email": "auditor@gridflow.ai",
-        "password": "AuditorPassword@123",
-        "full_name": "Regulatory Compliance Auditor",
-        "role": "auditor",
-        "organization": "CERC Regulatory Cell",
+        "email": "plantowner@gridflow.ai",
+        "password": "PlantPassword@123",
+        "full_name": "Solar & Wind Asset Director",
+        "role": "plant-owner",
+        "organization": "Adani Green & ReNew IPP Assets",
         "is_superuser": False
+    },
+    {
+        "email": "trader@gridflow.ai",
+        "password": "TraderPassword@123",
+        "full_name": "Lead Power Market Arbitrageur",
+        "role": "energy-trader",
+        "organization": "Indian Energy Exchange (IEX) Trading Desk",
+        "is_superuser": False
+    },
+    {
+        "email": "admin@gridflow.ai",
+        "password": "AdminPassword@123",
+        "full_name": "Chief Platform Architect",
+        "role": "admin",
+        "organization": "GridFlow Central Control",
+        "is_superuser": True
     }
 ]
 
 def seed_default_users_if_empty(db: Session):
     """
-    Seeds default administrative and operator credentials if users table is empty.
+    Seeds default role accounts if users table is empty.
     """
     count = db.query(User).count()
     if count == 0:
@@ -138,10 +160,12 @@ def login(
             detail="User account is deactivated. Contact system administrator."
         )
 
+    user_role = normalize_role(user.role)
+
     # Issue JWT Token
     access_token = create_access_token(
         subject=user.email,
-        role=user.role,
+        role=user_role,
         user_id=user.id,
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -153,17 +177,92 @@ def login(
         user=user,
         ip_address=client_ip,
         status="SUCCESS",
-        details={"role": user.role}
+        details={"role": user_role}
     )
 
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
         expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        role=user.role,
+        role=user_role,
         user_id=user.id,
         full_name=user.full_name,
-        email=user.email
+        email=user.email,
+        organization=user.organization
+    )
+
+@router.post("/signup", response_model=TokenResponse)
+def signup(
+    req: UserSignupRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Public self-registration endpoint for energy market participants:
+    Grid Operators, Utility Companies, Renewable Plant Owners, Energy Traders.
+    Immediately issues signed JWT session token upon registration.
+    """
+    seed_default_users_if_empty(db)
+    
+    clean_email = req.email.strip().lower()
+    existing = db.query(User).filter(User.email == clean_email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"An account with email '{clean_email}' already exists. Please log in."
+        )
+
+    assigned_role = normalize_role(req.role)
+    org = (req.organization or "").strip()
+    if not org:
+        default_orgs = {
+            "grid-operator": "State / National Load Despatch Centre",
+            "utility": "Power Distribution Utility (DISCOM)",
+            "plant-owner": "Independent Renewable Power Producer (IPP)",
+            "energy-trader": "Power Exchange Trading Desk"
+        }
+        org = default_orgs.get(assigned_role, "Clean Energy Enterprise")
+
+    new_user = User(
+        email=clean_email,
+        hashed_password=hash_password(req.password),
+        full_name=req.full_name.strip(),
+        role=assigned_role,
+        organization=org,
+        is_active=True,
+        is_superuser=False
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    client_ip = request.client.host if request.client else "unknown"
+    log_audit_event(
+        db=db,
+        action="USER_SIGNUP",
+        resource_type="auth",
+        user=new_user,
+        ip_address=client_ip,
+        status="SUCCESS",
+        details={"role": assigned_role, "organization": org}
+    )
+
+    access_token = create_access_token(
+        subject=new_user.email,
+        role=assigned_role,
+        user_id=new_user.id,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        role=assigned_role,
+        user_id=new_user.id,
+        full_name=new_user.full_name,
+        email=new_user.email,
+        organization=new_user.organization
     )
 
 @router.get("/me", response_model=UserResponse)

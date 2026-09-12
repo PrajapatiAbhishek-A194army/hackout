@@ -113,6 +113,40 @@ export async function fetchNationalForecast(horizonHours = 24) {
   }
 }
 
+export async function loginUser(credentials) {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials)
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Login failed. Please verify credentials.');
+  }
+  return await res.json();
+}
+
+export async function signupUser(userData) {
+  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData)
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Registration failed. Please check your inputs.');
+  }
+  return await res.json();
+}
+
+export async function fetchCurrentUserProfile(token) {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error('Session expired or invalid token');
+  return await res.json();
+}
+
 export default {
   checkBackendHealth,
   fetchPlants,
@@ -122,5 +156,8 @@ export default {
   fetchCurrentTelemetry,
   fetchAlertsSummary,
   fetchFarmForecast,
-  fetchNationalForecast
+  fetchNationalForecast,
+  loginUser,
+  signupUser,
+  fetchCurrentUserProfile
 };

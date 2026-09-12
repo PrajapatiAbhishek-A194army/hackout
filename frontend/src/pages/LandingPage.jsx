@@ -33,7 +33,7 @@ import {
   ForecastHorizonSelector 
 } from '../components';
 
-export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backendHealth }) {
+export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backendHealth, onOpenAuthModal }) {
   const [horizon, setHorizon] = useState('24h');
   const [selectedRoleTab, setSelectedRoleTab] = useState(activeRole || 'grid-operator');
 
@@ -160,15 +160,15 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
         
         <div className="relative z-10 max-w-4xl">
-          {/* Challenge Tag & Status Pill */}
+          {/* Enterprise Status & Grid Intelligence Pills */}
           <div className="flex flex-wrap items-center gap-3 mb-5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-semibold backdrop-blur-xs">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              HackOut Renewable Energy Challenge
+              National Clean Energy Grid Intelligence
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-medium backdrop-blur-xs">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              National Grid Intelligence
+              Live Telemetry & Decision Dispatch
             </span>
           </div>
 
@@ -446,9 +446,9 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
         <div className="mt-6 p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-start gap-3 text-xs text-emerald-900">
           <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
           <div className="leading-relaxed">
-            <strong>Why this architecture matters to judges:</strong> Predicting at farm level preserves site-specific physics 
-            (local cloud cover, elevation, turbine hub-height wind speed). Summing mathematically ensures 100% aggregation consistency 
-            with zero arithmetic mismatch across Farm $\rightarrow$ Region $\rightarrow$ State $\rightarrow$ National views.
+            <strong>Architectural Integrity:</strong> Predicting at individual farm nodes preserves site-specific atmospheric physics 
+            (local cloud albedo, elevation, turbine hub-height wind vectors). Mathematically summing upward ensures 100% aggregation consistency 
+            with zero arithmetic mismatch across Farm → Region → State → National balancing views.
           </div>
         </div>
       </section>
@@ -682,17 +682,23 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
             </div>
           </div>
 
-          {/* Action Recommendation Banner */}
-          <div className="mt-5 p-3.5 bg-white rounded-xl border border-emerald-300 text-xs flex items-center justify-between gap-3">
+          {/* Action Recommendation Banner & Login/Launch CTA */}
+          <div className="mt-5 p-4 bg-white rounded-xl border border-emerald-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span className="text-slate-700">
                 <strong>Recommended Operational Protocol:</strong> {currentRole.recommendation}
               </span>
             </div>
-            <span className="text-emerald-700 font-bold shrink-0 hidden sm:inline-block">
-              Priority 1
-            </span>
+            {onOpenAuthModal && (
+              <button
+                onClick={() => onOpenAuthModal('login', selectedRoleTab)}
+                className="shrink-0 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-xs"
+              >
+                <span>Launch {currentRole.title.split('&')[0]} Workspace</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -702,15 +708,15 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
         <div className="max-w-3xl mb-8">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold mb-3">
             <Database className="w-3.5 h-3.5" />
-            <span>Transparent & Verifiable Ingestion</span>
+            <span>Enterprise Ingestion & Telemetry Architecture</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Realistic Data Strategy & SCADA Pluggability
+            Multi-Source Ingestion & SCADA Integration
           </h2>
           <p className="mt-2 text-slate-300 text-sm leading-relaxed">
-            Individual SCADA feeds are not publicly available for every Indian renewable plant. 
-            For the MVP, we combine public plant metadata, live weather forecasts, and historical generation/environmental datasets. 
-            In production, plant owners connect their SCADA/IoT feed directly through the same data layer.
+            Continuous automated telemetry linking high-resolution numerical weather models, national power registries, 
+            and real-time SCADA sensor streams. The architecture provides resilient data feeds ensuring high-availability 
+            generation forecasts for national and state grid balancing authorities.
           </p>
         </div>
 
@@ -718,44 +724,44 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
           <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
             <h4 className="font-bold text-white text-sm flex items-center gap-2 mb-1">
               <Sun className="w-4 h-4 text-amber-400" />
-              Open-Meteo
+              Numerical Weather NWP
             </h4>
-            <p className="text-xs text-slate-300 mb-2">Live Weather at Coordinates</p>
+            <p className="text-xs text-slate-300 mb-2">High-Resolution Coordinate Feed</p>
             <span className="text-[11px] text-slate-400 block">
-              Automated queries for GHI, temperature, humidity, wind vectors at 10m & 100m.
+              Continuous assimilation of GHI, direct normal irradiance, temperature, and 100m turbine hub-height wind vectors.
             </span>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
             <h4 className="font-bold text-white text-sm flex items-center gap-2 mb-1">
               <Database className="w-4 h-4 text-blue-400" />
-              NASA POWER
+              Atmospheric Reanalysis
             </h4>
-            <p className="text-xs text-slate-300 mb-2">Historical Solar & Meteorology</p>
+            <p className="text-xs text-slate-300 mb-2">Solar & Wind Climatology</p>
             <span className="text-[11px] text-slate-400 block">
-              Multi-year historical solar irradiance benchmarks for feature enrichment.
+              Multi-decade irradiance and meteorological time-series for seasonal baseline normalization and anomaly detection.
             </span>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
             <h4 className="font-bold text-white text-sm flex items-center gap-2 mb-1">
               <Building2 className="w-4 h-4 text-emerald-400" />
-              MNRE / CEA
+              National Asset Registry
             </h4>
-            <p className="text-xs text-slate-300 mb-2">Indian Plant Metadata</p>
+            <p className="text-xs text-slate-300 mb-2">Grid Authority Metadata</p>
             <span className="text-[11px] text-slate-400 block">
-              Official capacity ratings, latitude/longitude, technology, state and region mappings.
+              Verified plant nameplate capacities, inverter specifications, interconnection nodes, and SLDC regional mappings.
             </span>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
             <h4 className="font-bold text-white text-sm flex items-center gap-2 mb-1">
               <Activity className="w-4 h-4 text-purple-400" />
-              SCADA Ready
+              SCADA & IoT Gateway
             </h4>
-            <p className="text-xs text-slate-300 mb-2">Private IoT Interface</p>
+            <p className="text-xs text-slate-300 mb-2">Real-Time Inverter Telemetry</p>
             <span className="text-[11px] text-slate-400 block">
-              Pluggable data layer ready for live inverter telemetry and actual generation records.
+              Substation telemetry adapters supporting Modbus, OPC-UA, and IEC 60870-5-104 grid communication standards.
             </span>
           </div>
         </div>
