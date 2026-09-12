@@ -3,6 +3,8 @@ from app.ml.features import FeatureEngineer, SOLAR_FEATURES, WIND_FEATURES
 from app.ml.synthetic_dataset import generate_training_dataset
 from app.ml.solar_model import SolarForecaster
 from app.ml.train_solar import train_and_register_solar_model
+from app.ml.wind_model import WindForecaster
+from app.ml.train_wind import train_and_register_wind_model
 
 __all__ = [
     "FeatureEngineer",
@@ -11,4 +13,6 @@ __all__ = [
     "generate_training_dataset",
     "SolarForecaster",
     "train_and_register_solar_model",
+    "WindForecaster",
+    "train_and_register_wind_model",
 ]
