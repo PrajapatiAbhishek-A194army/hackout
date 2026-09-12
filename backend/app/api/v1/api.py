@@ -3,13 +3,14 @@ from app.api.v1.endpoints import (
     health, plants, regions, weather, forecasts, alerts,
     pipeline_endpoints, features_endpoints, solar_endpoints, wind_endpoints,
     aggregation_endpoints, explainability_endpoints, storage_endpoints,
-    report_endpoints, mlops_endpoints
+    report_endpoints, mlops_endpoints, auth_endpoints
 )
 
 api_router = APIRouter()
 
 # Register core endpoint routers
 api_router.include_router(health.router, tags=["Health & Status"])
+api_router.include_router(auth_endpoints.router, prefix="/auth", tags=["Authentication & Security"])
 api_router.include_router(plants.router, prefix="/plants", tags=["Renewable Plants"])
 api_router.include_router(regions.router, prefix="/regions", tags=["Grid Regions & States"])
 api_router.include_router(weather.router, prefix="/weather", tags=["Weather Telemetry"])
