@@ -59,6 +59,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Reports Archive
+backend/reports_archive/*
+!backend/reports_archive/.gitkeep
+
 # IDE & System
 .idea/
 .vscode/
@@ -66,3 +70,4 @@ yarn-error.log*
 *.swo
 .DS_Store
 Thumbs.db
+

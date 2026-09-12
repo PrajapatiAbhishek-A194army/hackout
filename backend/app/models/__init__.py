@@ -7,6 +7,7 @@ from app.models.weather import Weather
 from app.models.forecast import Forecast
 from app.models.alert_recommendation import Alert, Recommendation
 from app.models.model_run import ModelRun
+from app.models.report import ReportRecord
 
 __all__ = [
     "Base",
@@ -20,4 +21,6 @@ __all__ = [
     "Alert",
     "Recommendation",
     "ModelRun",
+    "ReportRecord",
 ]
+
