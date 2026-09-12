@@ -33,7 +33,7 @@ import {
   ForecastHorizonSelector 
 } from '../components';
 
-export default function LandingPage({ activeRole, onSelectRole, backendHealth }) {
+export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backendHealth }) {
   const [horizon, setHorizon] = useState('24h');
   const [selectedRoleTab, setSelectedRoleTab] = useState(activeRole || 'grid-operator');
 
@@ -195,6 +195,16 @@ export default function LandingPage({ activeRole, onSelectRole, backendHealth })
                 value={horizon} 
                 onChange={(h) => setHorizon(h)} 
               />
+              {onOpenMap && (
+                <button
+                  onClick={onOpenMap}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur-xs transition-all shadow-xs"
+                >
+                  <Compass className="w-4 h-4 text-emerald-300" />
+                  <span>Interactive Spatial Map</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-emerald-300" />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-emerald-200">
@@ -217,9 +227,20 @@ export default function LandingPage({ activeRole, onSelectRole, backendHealth })
               Aggregated from farm-level XGBoost predictions across regional and state nodes
             </p>
           </div>
-          <Badge variant="normal" dot>
-            Live Synthesis
-          </Badge>
+          <div className="flex items-center gap-2">
+            {onOpenMap && (
+              <button
+                onClick={onOpenMap}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition-colors"
+              >
+                <Compass className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Spatial Map</span>
+              </button>
+            )}
+            <Badge variant="normal" dot>
+              Live Synthesis
+            </Badge>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
