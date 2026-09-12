@@ -29,12 +29,6 @@ export default function Navbar({
   onOpenAuthModal
 }) {
   const { user, isAuthenticated, logout, setTemporaryRole } = useAuth();
-  const roles = [
-    { id: 'grid-operator', label: 'Grid Operator' },
-    { id: 'plant-owner', label: 'Plant Owner' },
-    { id: 'utility', label: 'Utility Company' },
-    { id: 'energy-trader', label: 'Energy Trader' }
-  ];
 
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/90 sticky top-0 z-40 shadow-xs">
@@ -93,28 +87,6 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* Center: Operational Role Selector (Active on Overview) */}
-          <nav className="hidden lg:flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/70 text-xs">
-            {roles.map((role) => {
-              const active = activeRole === role.id;
-              return (
-                <button
-                  key={role.id}
-                  onClick={() => {
-                    if (onSelectRole) onSelectRole(role.id);
-                    if (onSelectView && activeView !== 'overview') onSelectView('overview');
-                  }}
-                  className={`px-3 py-1.5 font-semibold rounded-lg transition-all duration-150 ${
-                    active && activeView === 'overview'
-                      ? 'bg-white text-emerald-800 shadow-xs border border-slate-200/80 font-bold' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                  }`}
-                >
-                  {role.label}
-                </button>
-              );
-            })}
-          </nav>
 
           {/* Right Action Items: Auth Buttons / User Pill, Health Status & API Link */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
