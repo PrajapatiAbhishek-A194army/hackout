@@ -213,10 +213,22 @@ class ForecastEngine:
                     })
             prev_mw = pred_mw
 
+            if plant_type == "solar":
+                solar_mw_val = pred_mw
+                wind_mw_val = 0.0
+            elif plant_type == "wind":
+                solar_mw_val = 0.0
+                wind_mw_val = pred_mw
+            else:  # hybrid
+                solar_mw_val = float(solar_intervals["predicted_mw"].iloc[i])
+                wind_mw_val = float(wind_intervals["predicted_mw"].iloc[i])
+
             point = {
                 "timestamp": curr_ts,
                 "horizon_hours": horizon_hours,
                 "predicted_mw": pred_mw,
+                "solar_mw": round(solar_mw_val, 2),
+                "wind_mw": round(wind_mw_val, 2),
                 "lower_bound_mw": float(row["lower_bound_mw"]),
                 "upper_bound_mw": float(row["upper_bound_mw"]),
                 "confidence_score": float(row["confidence_score"]),
@@ -258,11 +270,16 @@ class ForecastEngine:
 
         # Operational summary statistics
         mw_values = [p["predicted_mw"] for p in forecast_points]
+        solar_values = [p["solar_mw"] for p in forecast_points]
+        wind_values = [p["wind_mw"] for p in forecast_points]
+
         peak_mw = max(mw_values) if mw_values else 0.0
         peak_idx = mw_values.index(peak_mw) if mw_values else 0
         peak_time = forecast_points[peak_idx]["timestamp"] if forecast_points else None
         avg_mw = sum(mw_values) / len(mw_values) if mw_values else 0.0
         total_mwh = sum(mw_values)
+        solar_mwh = sum(solar_values)
+        wind_mwh = sum(wind_values)
         cf_pct = round((avg_mw / capacity_mw * 100), 2) if capacity_mw > 0 else 0.0
 
         return {
@@ -276,6 +293,8 @@ class ForecastEngine:
             "peak_generation_timestamp": peak_time,
             "average_generation_mw": round(avg_mw, 2),
             "expected_total_mwh": round(total_mwh, 2),
+            "solar_total_mwh": round(solar_mwh, 2),
+            "wind_total_mwh": round(wind_mwh, 2),
             "capacity_factor_pct": cf_pct,
             "average_confidence": round(float(np.mean([p["confidence_score"] for p in forecast_points])), 2),
             "ramp_events_count": len(ramp_events),

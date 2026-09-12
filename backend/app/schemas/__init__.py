@@ -12,7 +12,7 @@ class HealthResponse(BaseModel):
 from app.schemas.region_state import StateBase, StateResponse, RegionBase, RegionResponse
 from app.schemas.plant import PlantBase, PlantCreate, PlantUpdate, PlantResponse, PlantDetailResponse
 from app.schemas.weather import WeatherBase, WeatherCreate, WeatherResponse
-from app.schemas.forecast import ForecastPoint, FarmForecastResponse, AggregatedForecastResponse, NationalForecastResponse
+from app.schemas.forecast import ForecastPoint, FarmForecastResponse, AggregatedForecastResponse, NationalForecastResponse, HierarchicalTreeResponse
 from app.schemas.alert import RecommendationResponse, AlertResponse, AlertStatsResponse
 
 __all__ = [
@@ -33,6 +33,7 @@ __all__ = [
     "FarmForecastResponse",
     "AggregatedForecastResponse",
     "NationalForecastResponse",
+    "HierarchicalTreeResponse",
     "RecommendationResponse",
     "AlertResponse",
     "AlertStatsResponse",
