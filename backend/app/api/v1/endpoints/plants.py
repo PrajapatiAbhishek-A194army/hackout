@@ -47,7 +47,14 @@ def get_plant_detail(
     
     alerts = crud.get_alerts(db=db, plant_id=plant_id, status="active")
     farm_fc = crud.get_farm_forecast(db=db, plant_id=plant_id, horizon_hours=1)
-    curr_fc_mw = farm_fc.forecast_points[0].predicted_mw if farm_fc and farm_fc.forecast_points else None
+    curr_fc_mw = None
+    if farm_fc:
+        if isinstance(farm_fc, dict):
+            fps = farm_fc.get("forecast_points") or []
+            if fps:
+                curr_fc_mw = fps[0].get("predicted_mw") if isinstance(fps[0], dict) else getattr(fps[0], "predicted_mw", None)
+        elif hasattr(farm_fc, "forecast_points") and farm_fc.forecast_points:
+            curr_fc_mw = getattr(farm_fc.forecast_points[0], "predicted_mw", None)
 
     return PlantDetailResponse(
         id=plant.id,

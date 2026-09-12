@@ -72,44 +72,8 @@ def get_weather_for_plant(db: Session, plant_id: int, limit: int = 48) -> List[W
 
 # Forecasts
 def get_farm_forecast(db: Session, plant_id: int, horizon_hours: int = 24) -> Optional[FarmForecastResponse]:
-    plant = db.query(Plant).filter(Plant.id == plant_id).first()
-    if not plant:
-        return None
-
-    forecasts = db.query(Forecast).filter(
-        Forecast.plant_id == plant_id,
-        Forecast.horizon_hours <= horizon_hours
-    ).order_by(Forecast.forecast_timestamp.asc()).limit(horizon_hours).all()
-
-    points = [
-        ForecastPoint(
-            timestamp=f.forecast_timestamp,
-            predicted_mw=f.predicted_mw,
-            confidence_score=f.confidence_score,
-            lower_bound_mw=f.lower_bound_mw,
-            upper_bound_mw=f.upper_bound_mw,
-            actual_mw=f.actual_mw,
-            horizon_hours=f.horizon_hours
-        )
-        for f in forecasts
-    ]
-
-    mw_values = [p.predicted_mw for p in points] if points else [0.0]
-    peak_mw = max(mw_values)
-    avg_mw = sum(mw_values) / len(mw_values) if mw_values else 0.0
-    cf_pct = round((avg_mw / plant.capacity_mw * 100), 2) if plant.capacity_mw > 0 else 0.0
-
-    return FarmForecastResponse(
-        plant_id=plant.id,
-        plant_name=plant.name,
-        plant_type=plant.plant_type,
-        capacity_mw=plant.capacity_mw,
-        horizon_hours=horizon_hours,
-        peak_generation_mw=round(peak_mw, 2),
-        average_generation_mw=round(avg_mw, 2),
-        capacity_factor_pct=cf_pct,
-        forecast_points=points
-    )
+    from app.aggregation.aggregator import aggregation_engine
+    return aggregation_engine.aggregate_farm(db=db, plant_id_or_code=plant_id, horizon_hours=horizon_hours)
 
 def get_aggregated_forecast(
     db: Session,
@@ -215,53 +179,8 @@ def get_aggregated_forecast(
     )
 
 def get_national_forecast(db: Session, horizon_hours: int = 24) -> NationalForecastResponse:
-    plants = db.query(Plant).all()
-    total_capacity = sum(p.capacity_mw for p in plants)
-
-    results = db.query(
-        Forecast.forecast_timestamp,
-        func.sum(Forecast.predicted_mw).label("sum_pred"),
-        func.sum(Forecast.lower_bound_mw).label("sum_lower"),
-        func.sum(Forecast.upper_bound_mw).label("sum_upper"),
-        func.avg(Forecast.confidence_score).label("avg_conf")
-    ).filter(
-        Forecast.horizon_hours <= horizon_hours
-    ).group_by(
-        Forecast.forecast_timestamp
-    ).order_by(
-        Forecast.forecast_timestamp.asc()
-    ).limit(horizon_hours).all()
-
-    points = [
-        ForecastPoint(
-            timestamp=row.forecast_timestamp,
-            predicted_mw=round(float(row.sum_pred or 0.0), 2),
-            confidence_score=round(float(row.avg_conf or 0.90), 2),
-            lower_bound_mw=round(float(row.sum_lower or 0.0), 2),
-            upper_bound_mw=round(float(row.sum_upper or 0.0), 2),
-            actual_mw=None,
-            horizon_hours=horizon_hours
-        )
-        for row in results
-    ]
-
-    peak_mw = max([p.predicted_mw for p in points]) if points else 0.0
-    daily_mwh = sum([p.predicted_mw for p in points]) if points else 0.0
-
-    solar_capacity = sum(p.capacity_mw for p in plants if p.plant_type == "solar")
-    wind_capacity = sum(p.capacity_mw for p in plants if p.plant_type == "wind")
-    solar_share = round((solar_capacity / total_capacity * 100), 1) if total_capacity > 0 else 60.0
-    wind_share = round((100.0 - solar_share), 1)
-
-    return NationalForecastResponse(
-        horizon_hours=horizon_hours,
-        total_capacity_mw=round(total_capacity, 2),
-        national_peak_mw=round(peak_mw, 2),
-        expected_daily_generation_mwh=round(daily_mwh, 2),
-        solar_contribution_pct=solar_share,
-        wind_contribution_pct=wind_share,
-        forecast_points=points
-    )
+    from app.aggregation.aggregator import aggregation_engine
+    return aggregation_engine.aggregate_national(db=db, horizon_hours=horizon_hours)
 
 # Alerts & Recommendations
 def get_alerts(
