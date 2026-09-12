@@ -152,6 +152,104 @@ def seed_database():
                 "operator_name": "Adani Green Energy Ltd (AGEL)",
                 "region_code": "WR",
                 "state_code": "GJ"
+            },
+            {
+                "name": "Kurnool Ultra Mega Solar Park",
+                "code": "KURNOOL_SOLAR_01",
+                "plant_type": "solar",
+                "capacity_mw": 1000.0,
+                "latitude": 15.6815,
+                "longitude": 78.2838,
+                "elevation_m": 310.0,
+                "technology": "High-Efficiency Polycrystalline Silicon with Central Inverters",
+                "commissioning_year": 2017,
+                "operator_name": "APSPCL / SB Energy / Azure",
+                "region_code": "SR",
+                "state_code": "AP"
+            },
+            {
+                "name": "Kamuthi Solar Power Project",
+                "code": "KAMUTHI_SOLAR_01",
+                "plant_type": "solar",
+                "capacity_mw": 648.0,
+                "latitude": 9.3512,
+                "longitude": 78.3846,
+                "elevation_m": 42.0,
+                "technology": "Mono-Crystalline Fixed Array Robotic Dry-Cleaned",
+                "commissioning_year": 2016,
+                "operator_name": "Adani Green Energy Ltd",
+                "region_code": "SR",
+                "state_code": "TN"
+            },
+            {
+                "name": "Rewa Ultra Mega Solar",
+                "code": "REWA_SOLAR_01",
+                "plant_type": "solar",
+                "capacity_mw": 750.0,
+                "latitude": 24.4820,
+                "longitude": 81.5740,
+                "elevation_m": 290.0,
+                "technology": "Single-Axis Tracking Bifacial Solar Panels",
+                "commissioning_year": 2018,
+                "operator_name": "Rewa Ultra Mega Solar Ltd (RUMSL)",
+                "region_code": "WR",
+                "state_code": "MP"
+            },
+            {
+                "name": "Ananthapuramu Solar Park",
+                "code": "ANANTHAPURAMU_SOLAR_01",
+                "plant_type": "solar",
+                "capacity_mw": 1500.0,
+                "latitude": 14.9812,
+                "longitude": 77.4589,
+                "elevation_m": 410.0,
+                "technology": "Polycrystalline & High-Yield PERC Modules",
+                "commissioning_year": 2018,
+                "operator_name": "APSPCL / NTPC",
+                "region_code": "SR",
+                "state_code": "AP"
+            },
+            {
+                "name": "Brahmanweli Wind Farm",
+                "code": "BRAHMANWELI_WIND_01",
+                "plant_type": "wind",
+                "capacity_mw": 528.0,
+                "latitude": 21.0500,
+                "longitude": 74.3167,
+                "elevation_m": 350.0,
+                "technology": "Suzlon S88 & Gamesa G97 2.0MW High Hub Turbines",
+                "commissioning_year": 2014,
+                "operator_name": "Suzlon Energy / CLP India",
+                "region_code": "WR",
+                "state_code": "MH"
+            },
+            {
+                "name": "Kayathar Wind Farm",
+                "code": "KAYATHAR_WIND_01",
+                "plant_type": "wind",
+                "capacity_mw": 300.0,
+                "latitude": 8.9500,
+                "longitude": 77.7833,
+                "elevation_m": 88.0,
+                "technology": "2.1MW Senvion Low Wind Regime Turbines",
+                "commissioning_year": 2015,
+                "operator_name": "ReNew Power / TANGEDCO",
+                "region_code": "SR",
+                "state_code": "TN"
+            },
+            {
+                "name": "Dhalgaon Wind Farm",
+                "code": "DHALGAON_WIND_01",
+                "plant_type": "wind",
+                "capacity_mw": 278.0,
+                "latitude": 17.0333,
+                "longitude": 74.8833,
+                "elevation_m": 680.0,
+                "technology": "Enercon E-53 & Suzlon 2.1MW Turbines",
+                "commissioning_year": 2013,
+                "operator_name": "Gadre Marine / Tata Power",
+                "region_code": "WR",
+                "state_code": "MH"
             }
         ]
 
@@ -181,101 +279,103 @@ def seed_database():
         # 4. Hourly Forecast & Weather Data (72-hour Horizon)
         base_time = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
         
-        # Check if forecasts already seeded
-        forecast_count = db.query(Forecast).count()
-        if forecast_count < 100:
-            print("[SEED] Generating 72-hour realistic generation forecasts and weather telemetry...")
-            for plant_code, plant in plant_map.items():
-                is_solar = plant.plant_type in ("solar", "hybrid")
-                is_wind = plant.plant_type in ("wind", "hybrid")
+        # Ensure forecasts are seeded for every plant
+        print("[SEED] Ensuring 72-hour realistic generation forecasts and weather telemetry for all plants...")
+        for plant_code, plant in plant_map.items():
+            existing_fc_count = db.query(Forecast).filter(Forecast.plant_id == plant.id).count()
+            if existing_fc_count >= 24:
+                continue
 
-                for hour_offset in range(72):
-                    target_time = base_time + timedelta(hours=hour_offset)
-                    hour_of_day = target_time.hour
+            is_solar = plant.plant_type in ("solar", "hybrid")
+            is_wind = plant.plant_type in ("wind", "hybrid")
 
-                    # Weather Simulation
-                    if is_solar:
-                        # Solar bell curve: rises at 6am, peaks at 12pm-1pm, sets at 6pm
-                        if 6 <= hour_of_day <= 18:
-                            rad = math.sin((hour_of_day - 6) / 12.0 * math.pi)
-                            ghi = round(max(0.0, rad * 950.0 + (5.0 * (hour_offset % 7))), 1)
-                            dni = round(ghi * 0.85, 1)
-                            dhi = round(ghi * 0.15, 1)
-                            temp = round(28.0 + rad * 12.0, 1)
-                            cloud = round(max(0.0, 15.0 + math.cos(hour_offset * 0.3) * 10.0), 1)
-                        else:
-                            ghi, dni, dhi = 0.0, 0.0, 0.0
-                            temp = round(22.0 - ((hour_of_day + 4) % 6) * 0.8, 1)
-                            cloud = round(10.0 + (hour_offset % 5), 1)
+            for hour_offset in range(72):
+                target_time = base_time + timedelta(hours=hour_offset)
+                hour_of_day = target_time.hour
+
+                # Weather Simulation
+                if is_solar:
+                    # Solar bell curve: rises at 6am, peaks at 12pm-1pm, sets at 6pm
+                    if 6 <= hour_of_day <= 18:
+                        rad = math.sin((hour_of_day - 6) / 12.0 * math.pi)
+                        ghi = round(max(0.0, rad * 950.0 + (5.0 * (hour_offset % 7))), 1)
+                        dni = round(ghi * 0.85, 1)
+                        dhi = round(ghi * 0.15, 1)
+                        temp = round(28.0 + rad * 12.0, 1)
+                        cloud = round(max(0.0, 15.0 + math.cos(hour_offset * 0.3) * 10.0), 1)
                     else:
                         ghi, dni, dhi = 0.0, 0.0, 0.0
-                        temp = round(26.0 + math.sin(hour_of_day / 24.0 * 2 * math.pi) * 6.0, 1)
-                        cloud = round(25.0 + math.sin(hour_offset * 0.5) * 15.0, 1)
+                        temp = round(22.0 - ((hour_of_day + 4) % 6) * 0.8, 1)
+                        cloud = round(10.0 + (hour_offset % 5), 1)
+                else:
+                    ghi, dni, dhi = 0.0, 0.0, 0.0
+                    temp = round(26.0 + math.sin(hour_of_day / 24.0 * 2 * math.pi) * 6.0, 1)
+                    cloud = round(25.0 + math.sin(hour_offset * 0.5) * 15.0, 1)
 
-                    # Wind simulation: peaks in late afternoon/night
-                    wind_diurnal = 7.5 + math.sin((hour_of_day - 14) / 24.0 * 2 * math.pi) * 3.5
-                    wind_100m = round(max(2.5, wind_diurnal + (math.sin(hour_offset * 0.8) * 1.8)), 1)
-                    wind_10m = round(wind_100m * 0.72, 1)
+                # Wind simulation: peaks in late afternoon/night
+                wind_diurnal = 7.5 + math.sin((hour_of_day - 14) / 24.0 * 2 * math.pi) * 3.5
+                wind_100m = round(max(2.5, wind_diurnal + (math.sin(hour_offset * 0.8) * 1.8)), 1)
+                wind_10m = round(wind_100m * 0.72, 1)
 
-                    weather_record = Weather(
-                        plant_id=plant.id,
-                        timestamp=target_time,
-                        ghi=ghi,
-                        dni=dni,
-                        dhi=dhi,
-                        temperature_c=temp,
-                        relative_humidity=round(45.0 + math.cos(hour_of_day / 12.0) * 15.0, 1),
-                        cloud_cover_pct=cloud,
-                        surface_pressure_hpa=1010.5,
-                        wind_speed_10m=wind_10m,
-                        wind_speed_100m=wind_100m,
-                        wind_direction_deg=round((240.0 + hour_offset * 2.5) % 360, 1),
-                        source="open_meteo"
-                    )
-                    db.add(weather_record)
+                weather_record = Weather(
+                    plant_id=plant.id,
+                    timestamp=target_time,
+                    ghi=ghi,
+                    dni=dni,
+                    dhi=dhi,
+                    temperature_c=temp,
+                    relative_humidity=round(45.0 + math.cos(hour_of_day / 12.0) * 15.0, 1),
+                    cloud_cover_pct=cloud,
+                    surface_pressure_hpa=1010.5,
+                    wind_speed_10m=wind_10m,
+                    wind_speed_100m=wind_100m,
+                    wind_direction_deg=round((240.0 + hour_offset * 2.5) % 360, 1),
+                    source="open_meteo"
+                )
+                db.add(weather_record)
 
-                    # Generation Forecast Calculation
-                    solar_mw = 0.0
-                    wind_mw = 0.0
+                # Generation Forecast Calculation
+                solar_mw = 0.0
+                wind_mw = 0.0
 
-                    if is_solar:
-                        solar_ratio = (ghi / 1000.0) * (1.0 - cloud * 0.005)
-                        # Derating from temperature (0.35% per deg C above 25C)
-                        temp_derate = max(0.85, 1.0 - max(0.0, temp - 25.0) * 0.0035)
-                        solar_cap = plant.capacity_mw * (0.6 if plant.plant_type == "hybrid" else 1.0)
-                        solar_mw = max(0.0, solar_cap * solar_ratio * temp_derate)
+                if is_solar:
+                    solar_ratio = (ghi / 1000.0) * (1.0 - cloud * 0.005)
+                    # Derating from temperature (0.35% per deg C above 25C)
+                    temp_derate = max(0.85, 1.0 - max(0.0, temp - 25.0) * 0.0035)
+                    solar_cap = plant.capacity_mw * (0.6 if plant.plant_type == "hybrid" else 1.0)
+                    solar_mw = max(0.0, solar_cap * solar_ratio * temp_derate)
 
-                    if is_wind:
-                        wind_cap = plant.capacity_mw * (0.4 if plant.plant_type == "hybrid" else 1.0)
-                        # Power curve logic
-                        cut_in, rated, cut_out = 3.0, 11.5, 25.0
-                        if wind_100m < cut_in or wind_100m > cut_out:
-                            wind_mw = 0.0
-                        elif wind_100m >= rated:
-                            wind_mw = wind_cap
-                        else:
-                            wind_mw = wind_cap * ((wind_100m - cut_in) / (rated - cut_in)) ** 2.2
+                if is_wind:
+                    wind_cap = plant.capacity_mw * (0.4 if plant.plant_type == "hybrid" else 1.0)
+                    # Power curve logic
+                    cut_in, rated, cut_out = 3.0, 11.5, 25.0
+                    if wind_100m < cut_in or wind_100m > cut_out:
+                        wind_mw = 0.0
+                    elif wind_100m >= rated:
+                        wind_mw = wind_cap
+                    else:
+                        wind_mw = wind_cap * ((wind_100m - cut_in) / (rated - cut_in)) ** 2.2
 
-                    total_predicted = round(solar_mw + wind_mw, 1)
-                    confidence = round(max(0.82, 0.95 - (hour_offset / 72.0) * 0.12), 2)
-                    uncertainty_margin = (1.0 - confidence) * plant.capacity_mw * 0.4
-                    lower_bound = round(max(0.0, total_predicted - uncertainty_margin), 1)
-                    upper_bound = round(min(plant.capacity_mw, total_predicted + uncertainty_margin), 1)
+                total_predicted = round(solar_mw + wind_mw, 1)
+                confidence = round(max(0.82, 0.95 - (hour_offset / 72.0) * 0.12), 2)
+                uncertainty_margin = (1.0 - confidence) * plant.capacity_mw * 0.4
+                lower_bound = round(max(0.0, total_predicted - uncertainty_margin), 1)
+                upper_bound = round(min(plant.capacity_mw, total_predicted + uncertainty_margin), 1)
 
-                    horizon = 24 if hour_offset < 24 else (48 if hour_offset < 48 else 72)
+                horizon = 24 if hour_offset < 24 else (48 if hour_offset < 48 else 72)
 
-                    forecast_record = Forecast(
-                        plant_id=plant.id,
-                        forecast_timestamp=target_time,
-                        horizon_hours=horizon,
-                        predicted_mw=total_predicted,
-                        confidence_score=confidence,
-                        lower_bound_mw=lower_bound,
-                        upper_bound_mw=upper_bound,
-                        actual_mw=None,
-                        model_version="v1.0-xgb"
-                    )
-                    db.add(forecast_record)
+                forecast_record = Forecast(
+                    plant_id=plant.id,
+                    forecast_timestamp=target_time,
+                    horizon_hours=horizon,
+                    predicted_mw=total_predicted,
+                    confidence_score=confidence,
+                    lower_bound_mw=lower_bound,
+                    upper_bound_mw=upper_bound,
+                    actual_mw=None,
+                    model_version="v1.0-xgb"
+                )
+                db.add(forecast_record)
 
         # 5. Grid Alerts & Explainable Recommendations
         if db.query(Alert).count() == 0:

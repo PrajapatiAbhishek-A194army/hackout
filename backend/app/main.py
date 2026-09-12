@@ -21,6 +21,12 @@ async def lifespan(app: FastAPI):
         # Create tables if not present (migration ready)
         Base.metadata.create_all(bind=engine)
         logger.info("Database connection and schema tables verified.")
+        try:
+            from app.services.seed_data import seed_database
+            logger.info("Executing seed_database() to populate solar and wind plants...")
+            seed_database()
+        except Exception as seed_err:
+            logger.warning(f"Database seed notice: {seed_err}")
     except Exception as e:
         logger.warning(f"Database schema initialization notice: {e}")
     yield
