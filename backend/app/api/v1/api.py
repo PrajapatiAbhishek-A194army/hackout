@@ -3,7 +3,7 @@ from app.api.v1.endpoints import (
     health, plants, regions, weather, forecasts, alerts,
     pipeline_endpoints, features_endpoints, solar_endpoints, wind_endpoints,
     aggregation_endpoints, explainability_endpoints, storage_endpoints,
-    report_endpoints
+    report_endpoints, mlops_endpoints
 )
 
 api_router = APIRouter()
@@ -19,6 +19,7 @@ api_router.include_router(explainability_endpoints.router, prefix="/explain", ta
 api_router.include_router(alerts.router, prefix="/alerts", tags=["Grid Alerts & Recommendations"])
 api_router.include_router(storage_endpoints.router, prefix="/storage", tags=["Battery Energy Storage (BESS)"])
 api_router.include_router(report_endpoints.router, prefix="/reports", tags=["Reporting & Compliance Exports"])
+api_router.include_router(mlops_endpoints.router, prefix="/mlops", tags=["MLOps, Retraining & Drift Monitoring"])
 api_router.include_router(pipeline_endpoints.router, prefix="/pipeline", tags=["Data Pipeline & Ingestion"])
 
 api_router.include_router(features_endpoints.router, prefix="/features", tags=["Feature Engineering"])
