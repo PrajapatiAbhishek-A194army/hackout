@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   MapContainer, 
   TileLayer, 
   Marker, 
   Popup, 
   Circle, 
-  useMap 
+  useMap,
+  useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
 import { 
@@ -16,10 +17,14 @@ import {
   ArrowRight, 
   Activity, 
   Layers,
-  Map as MapIcon,
-  Globe,
-  Mountain,
-  Maximize2
+  MapPin,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  Compass,
+  CheckCircle2,
+  Eye,
+  SlidersHorizontal
 } from 'lucide-react';
 
 // Free, reliable, non-watermarked tile basemaps (100% free, zero API key required)
@@ -50,23 +55,44 @@ const BASEMAP_PROVIDERS = {
   }
 };
 
-// Controller to smoothly pan & zoom map when selected plant or region changes
-function MapViewController({ selectedPlant, selectedRegion }) {
+// Known State Geolocation Centers and Zoom Boundaries
+export const STATE_GEO_CONFIG = {
+  RJ: { code: 'RJ', name: 'Rajasthan', center: [26.8, 72.8], zoom: 7.2, flag: '🐪', desc: 'Desert Solar & Thar Wind Corridors' },
+  GJ: { code: 'GJ', name: 'Gujarat', center: [23.1, 70.8], zoom: 7.2, flag: '🦁', desc: 'Kutch Hybrid Hub & Charanka Basin' },
+  TN: { code: 'TN', name: 'Tamil Nadu', center: [9.8, 78.1], zoom: 7.4, flag: '🛕', desc: 'Muppandal Pass Wind & Southern Solar' },
+  KA: { code: 'KA', name: 'Karnataka', center: [14.4, 76.5], zoom: 7.2, flag: '☕', desc: 'Pavagada Mega Solar & Deccan Wind' },
+  AP: { code: 'AP', name: 'Andhra Pradesh', center: [15.2, 78.6], zoom: 7.2, flag: '⚡', desc: 'Rayalaseema Ultra Mega Solar Belt' },
+  MH: { code: 'MH', name: 'Maharashtra', center: [19.2, 74.8], zoom: 7.2, flag: '🏭', desc: 'Western Ghats Wind Corridors' },
+  MP: { code: 'MP', name: 'Madhya Pradesh', center: [24.0, 79.2], zoom: 7.2, flag: '🐯', desc: 'Central Rewa Solar Cluster' },
+};
+
+// Smooth Pan & Zoom Controller for Plant, Region, and State navigation
+function MapViewController({ selectedPlant, selectedRegion, selectedState }) {
   const map = useMap();
 
+  // Focus plant
   useEffect(() => {
     if (selectedPlant && selectedPlant.latitude && selectedPlant.longitude) {
-      map.flyTo([selectedPlant.latitude, selectedPlant.longitude], 8, {
-        duration: 1.5,
+      map.flyTo([selectedPlant.latitude, selectedPlant.longitude], 8.5, {
+        duration: 1.4,
         easeLinearity: 0.25
       });
     }
   }, [selectedPlant, map]);
 
+  // Focus state
   useEffect(() => {
-    if (!selectedRegion || selectedRegion === 'all') return;
-    
-    // Region bounding coordinates
+    if (!selectedState || selectedState === 'all') return;
+    const geo = STATE_GEO_CONFIG[selectedState] || 
+                Object.values(STATE_GEO_CONFIG).find(s => s.name.toLowerCase() === selectedState.toLowerCase() || s.code.toLowerCase() === selectedState.toLowerCase());
+    if (geo) {
+      map.flyTo(geo.center, geo.zoom, { duration: 1.4 });
+    }
+  }, [selectedState, map]);
+
+  // Focus region
+  useEffect(() => {
+    if (!selectedRegion || selectedRegion === 'all' || (selectedState && selectedState !== 'all')) return;
     const regionCenters = {
       'NR': { center: [27.5, 74.0], zoom: 6 },
       'WR': { center: [22.0, 72.0], zoom: 6 },
@@ -74,12 +100,43 @@ function MapViewController({ selectedPlant, selectedRegion }) {
       'ER': { center: [23.5, 85.5], zoom: 6 },
       'NER': { center: [26.2, 92.5], zoom: 6 },
     };
-
     const target = regionCenters[selectedRegion];
     if (target) {
       map.flyTo(target.center, target.zoom, { duration: 1.2 });
     }
-  }, [selectedRegion, map]);
+  }, [selectedRegion, selectedState, map]);
+
+  return null;
+}
+
+// Listener for real-time viewport changes when user zooms or pans
+function MapEventsListener({ onViewportChange }) {
+  const map = useMapEvents({
+    moveend: () => {
+      onViewportChange({
+        bounds: map.getBounds(),
+        zoom: map.getZoom(),
+        center: map.getCenter()
+      });
+    },
+    zoomend: () => {
+      onViewportChange({
+        bounds: map.getBounds(),
+        zoom: map.getZoom(),
+        center: map.getCenter()
+      });
+    }
+  });
+
+  useEffect(() => {
+    if (map) {
+      onViewportChange({
+        bounds: map.getBounds(),
+        zoom: map.getZoom(),
+        center: map.getCenter()
+      });
+    }
+  }, [map]);
 
   return null;
 }
@@ -141,7 +198,7 @@ function createPlantIcon(plant, telemetry, isSelected = false) {
 
   // Selected highlight ring
   const selectedHalo = isSelected ? `
-    <span class="absolute -inset-2.5 rounded-full border-2 border-emerald-400 animate-pulse pointer-events-none" style="box-shadow: 0 0 15px rgba(52, 211, 153, 0.7)"></span>
+    <span class="absolute -inset-2.5 rounded-full border-2 border-emerald-400 animate-pulse pointer-events-none" style="box-shadow: 0 0 16px rgba(52, 211, 153, 0.8)"></span>
   ` : '';
 
   // Clean SVG icons for Solar (Sun), Wind (Turbine), and Hybrid (Zap)
@@ -176,17 +233,26 @@ function createPlantIcon(plant, telemetry, isSelected = false) {
 
 export default function RenewableMap({
   plants = [],
+  allPlants = [],
+  states = [],
   telemetryMap = {},
   selectedPlant = null,
+  selectedState = null,
   onSelectPlant,
-  filters = { showHeatmap: true, showWeather: false, showRegionalClusters: true, region: 'all' }
+  onSelectState,
+  filters = { showHeatmap: true, showWeather: false, showRegionalClusters: true, region: 'all', state: 'all' }
 }) {
   // Indian Grid Centroid
   const defaultCenter = [22.5, 78.5];
   const defaultZoom = 5;
 
-  // Selected Basemap state (defaults to 100% free OpenStreetMap)
+  // Basemap state (defaults to 100% free OpenStreetMap)
   const [activeBasemap, setActiveBasemap] = useState('osm');
+
+  // Real-time map viewport state for zoom-level awareness
+  const [viewport, setViewport] = useState({ bounds: null, zoom: defaultZoom, center: defaultCenter });
+  const [stateTabFilter, setStateTabFilter] = useState('all'); // 'all' | 'solar' | 'wind'
+  const [isStateCardCollapsed, setIsStateCardCollapsed] = useState(false);
 
   // Regional Balancing Hub Centroids & Estimated Interconnection Capacity
   const regionalClusters = [
@@ -198,10 +264,91 @@ export default function RenewableMap({
 
   const currentBasemap = BASEMAP_PROVIDERS[activeBasemap] || BASEMAP_PROVIDERS.osm;
 
+  // Determine which plants are in the currently visible map viewport
+  const plantsInView = useMemo(() => {
+    if (!viewport.bounds) return plants;
+    return plants.filter(p => {
+      try {
+        return viewport.bounds.contains([p.latitude, p.longitude]);
+      } catch (e) {
+        return true;
+      }
+    });
+  }, [plants, viewport.bounds]);
+
+  // Aggregate statistics for plants inside the visible zoom area
+  const inViewStats = useMemo(() => {
+    const solarPlants = plantsInView.filter(p => p.plant_type === 'solar');
+    const windPlants = plantsInView.filter(p => p.plant_type === 'wind');
+    const hybridPlants = plantsInView.filter(p => p.plant_type === 'hybrid');
+
+    const totalSolarMW = solarPlants.reduce((sum, p) => sum + (p.capacity_mw || 0), 0);
+    const totalWindMW = windPlants.reduce((sum, p) => sum + (p.capacity_mw || 0), 0);
+    const totalHybridMW = hybridPlants.reduce((sum, p) => sum + (p.capacity_mw || 0), 0);
+
+    const liveSolarMW = solarPlants.reduce((sum, p) => {
+      const t = telemetryMap[p.id] || telemetryMap[p.code];
+      return sum + (t?.current_generation_mw || p.capacity_mw * 0.74);
+    }, 0);
+
+    const liveWindMW = windPlants.reduce((sum, p) => {
+      const t = telemetryMap[p.id] || telemetryMap[p.code];
+      return sum + (t?.current_generation_mw || p.capacity_mw * 0.65);
+    }, 0);
+
+    return {
+      total: plantsInView.length,
+      solarCount: solarPlants.length,
+      windCount: windPlants.length,
+      hybridCount: hybridPlants.length,
+      totalSolarMW: Math.round(totalSolarMW),
+      totalWindMW: Math.round(totalWindMW),
+      totalHybridMW: Math.round(totalHybridMW),
+      totalMW: Math.round(totalSolarMW + totalWindMW + totalHybridMW),
+      liveTotalMW: Math.round(liveSolarMW + liveWindMW + (hybridPlants.length * 3500)),
+      solarPlants,
+      windPlants,
+      hybridPlants
+    };
+  }, [plantsInView, telemetryMap]);
+
+  // Filter the plants shown in the state HUD by technology tab
+  const displayedHudPlants = useMemo(() => {
+    if (stateTabFilter === 'solar') return inViewStats.solarPlants;
+    if (stateTabFilter === 'wind') return inViewStats.windPlants;
+    return plantsInView;
+  }, [stateTabFilter, inViewStats, plantsInView]);
+
+  // Determine active state name from selectedState or viewport center
+  const activeStateName = useMemo(() => {
+    if (selectedState && selectedState !== 'all') {
+      const found = Object.values(STATE_GEO_CONFIG).find(s => s.code === selectedState || s.name === selectedState);
+      return found?.name || selectedState;
+    }
+    // If zoomed in (zoom >= 6.5), try to find closest known state
+    if (viewport.zoom >= 6.5 && viewport.center) {
+      for (const [code, conf] of Object.entries(STATE_GEO_CONFIG)) {
+        const dLat = Math.abs(viewport.center.lat - conf.center[0]);
+        const dLng = Math.abs(viewport.center.lng - conf.center[1]);
+        if (dLat < 2.5 && dLng < 2.5) {
+          return `${conf.name}`;
+        }
+      }
+    }
+    return null;
+  }, [selectedState, viewport]);
+
+  // State geo config for focused state circle highlight
+  const focusedStateGeo = useMemo(() => {
+    if (!selectedState || selectedState === 'all') return null;
+    return STATE_GEO_CONFIG[selectedState] || 
+           Object.values(STATE_GEO_CONFIG).find(s => s.name.toLowerCase() === selectedState.toLowerCase() || s.code.toLowerCase() === selectedState.toLowerCase());
+  }, [selectedState]);
+
   return (
-    <div className="relative w-full h-[620px] lg:h-[720px] rounded-3xl overflow-hidden shadow-elevated border border-slate-200">
+    <div className="relative w-full h-[650px] lg:h-[750px] rounded-3xl overflow-hidden shadow-elevated border border-slate-200">
       
-      {/* Top Left: Clean Basemap Layer Switcher (Street / Satellite / Topo) */}
+      {/* Top Left: Basemap Switcher (Street / Satellite / Topo) */}
       <div className="absolute top-4 left-4 z-[400] flex items-center gap-1 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/90 shadow-md text-xs pointer-events-auto">
         <span className="text-[11px] font-bold text-slate-500 px-2 flex items-center gap-1">
           <Layers className="w-3.5 h-3.5 text-slate-600" />
@@ -224,85 +371,242 @@ export default function RenewableMap({
         ))}
       </div>
 
-      {/* Top Right: Floating Quick Region Jump Controls */}
-      <div className="absolute top-4 right-4 z-[400] flex flex-wrap items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/90 shadow-md text-xs pointer-events-auto">
-        <span className="text-[11px] font-bold text-slate-500 px-2 hidden md:inline">Jump:</span>
+      {/* Top Right: State Quick-Zoom Navigation Bar */}
+      <div className="absolute top-4 right-4 z-[400] flex flex-wrap items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/90 shadow-md text-xs pointer-events-auto max-w-xl">
+        <span className="text-[11px] font-bold text-slate-600 px-2 flex items-center gap-1">
+          <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Zoom State:</span>
+        </span>
+        
         <button
-          onClick={() => onSelectPlant && onSelectPlant({ latitude: 22.5, longitude: 78.5, name: 'All India' })}
-          className="px-2.5 py-1 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+          onClick={() => onSelectState && onSelectState('all')}
+          className={`px-2.5 py-1 rounded-xl font-semibold transition-colors ${
+            !selectedState || selectedState === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-100'
+          }`}
         >
           All India
         </button>
-        <button
-          onClick={() => onSelectPlant && onSelectPlant({ latitude: 27.2, longitude: 73.0, name: 'Northern Grid' })}
-          className="px-2.5 py-1 rounded-xl font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
-        >
-          Northern (NR)
-        </button>
-        <button
-          onClick={() => onSelectPlant && onSelectPlant({ latitude: 23.5, longitude: 70.8, name: 'Western Grid' })}
-          className="px-2.5 py-1 rounded-xl font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
-        >
-          Western (WR)
-        </button>
-        <button
-          onClick={() => onSelectPlant && onSelectPlant({ latitude: 12.0, longitude: 77.4, name: 'Southern Grid' })}
-          className="px-2.5 py-1 rounded-xl font-semibold text-purple-700 hover:bg-purple-50 transition-colors"
-        >
-          Southern (SR)
-        </button>
+
+        {Object.entries(STATE_GEO_CONFIG).map(([code, config]) => {
+          const isSelected = selectedState === code || selectedState === config.name;
+          return (
+            <button
+              key={code}
+              onClick={() => onSelectState && onSelectState(code)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-xl font-semibold transition-all ${
+                isSelected
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800'
+              }`}
+              title={`Zoom to ${config.name} (${config.desc})`}
+            >
+              <span>{config.flag}</span>
+              <span>{config.name.split(' ')[0]}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Floating Dynamic "Farms In View" / "State Renewable Assets" HUD Card */}
+      <div className={`absolute bottom-4 right-4 z-[400] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-xl transition-all duration-300 pointer-events-auto ${
+        isStateCardCollapsed ? 'w-auto' : 'w-80 sm:w-96'
+      }`}>
+        {/* Card Header */}
+        <div className="flex items-center justify-between p-3 border-b border-slate-200/80">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 text-xs">
+              <Eye className="w-3.5 h-3.5" />
+            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-extrabold text-xs text-slate-900 leading-tight">
+                  {activeStateName ? `📍 ${activeStateName} Farms` : `🔍 Visible Farms (Zoom ${Math.round(viewport.zoom)})`}
+                </h3>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  {inViewStats.total} In View
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block">
+                Live Spatial Telemetry • {inViewStats.totalMW.toLocaleString()} MW Capacity
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsStateCardCollapsed(!isStateCardCollapsed)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title={isStateCardCollapsed ? "Expand Viewport Farms" : "Collapse"}
+          >
+            {isStateCardCollapsed ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {/* Expanded Viewport Details */}
+        {!isStateCardCollapsed && (
+          <div className="p-3 space-y-3 max-h-72 overflow-y-auto">
+            
+            {/* Quick Stat Pill Ribbon */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-amber-50/90 p-2 rounded-xl border border-amber-200/80">
+                <div className="flex items-center gap-1.5 text-amber-900 font-bold text-[11px] mb-0.5">
+                  <span>☀️ Solar In View</span>
+                </div>
+                <span className="text-sm font-extrabold text-amber-950 block">
+                  {inViewStats.solarCount} Farms • {inViewStats.totalSolarMW.toLocaleString()} MW
+                </span>
+              </div>
+
+              <div className="bg-teal-50/90 p-2 rounded-xl border border-teal-200/80">
+                <div className="flex items-center gap-1.5 text-teal-900 font-bold text-[11px] mb-0.5">
+                  <span>💨 Wind In View</span>
+                </div>
+                <span className="text-sm font-extrabold text-teal-950 block">
+                  {inViewStats.windCount} Farms • {inViewStats.totalWindMW.toLocaleString()} MW
+                </span>
+              </div>
+            </div>
+
+            {/* In-Card Technology Tab Filter */}
+            <div className="flex items-center justify-between gap-1 bg-slate-100 p-1 rounded-xl text-[11px] font-medium">
+              <button
+                onClick={() => setStateTabFilter('all')}
+                className={`flex-1 py-1 rounded-lg text-center transition-all ${
+                  stateTabFilter === 'all' ? 'bg-white font-bold text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All ({inViewStats.total})
+              </button>
+              <button
+                onClick={() => setStateTabFilter('solar')}
+                className={`flex-1 py-1 rounded-lg text-center transition-all ${
+                  stateTabFilter === 'solar' ? 'bg-white font-bold text-amber-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ☀️ Solar ({inViewStats.solarCount})
+              </button>
+              <button
+                onClick={() => setStateTabFilter('wind')}
+                className={`flex-1 py-1 rounded-lg text-center transition-all ${
+                  stateTabFilter === 'wind' ? 'bg-white font-bold text-teal-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                💨 Wind ({inViewStats.windCount})
+              </button>
+            </div>
+
+            {/* List of Farms Currently Inside the Visible Zoom Area */}
+            <div className="space-y-1.5">
+              {displayedHudPlants.length === 0 ? (
+                <div className="text-center py-4 text-xs text-slate-400">
+                  <span>No renewable plants found in this visible map zoom. Zoom out or pan to a renewable corridor.</span>
+                </div>
+              ) : (
+                displayedHudPlants.map((plant) => {
+                  const telemetry = telemetryMap[plant.id] || telemetryMap[plant.code];
+                  const genMW = telemetry?.current_generation_mw ?? (plant.capacity_mw * 0.74);
+                  const isSolar = plant.plant_type === 'solar';
+                  const isWind = plant.plant_type === 'wind';
+                  const isSelected = selectedPlant?.id === plant.id || selectedPlant?.code === plant.code;
+
+                  return (
+                    <div
+                      key={plant.id}
+                      onClick={() => onSelectPlant && onSelectPlant(plant)}
+                      className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                        isSelected 
+                          ? 'bg-emerald-50 border-emerald-300 shadow-xs' 
+                          : 'bg-slate-50/70 border-slate-200/70 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`flex items-center justify-center w-6 h-6 rounded-lg text-xs shrink-0 ${
+                          isSolar ? 'bg-amber-100 text-amber-700' :
+                          isWind ? 'bg-teal-100 text-teal-700' : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {isSolar ? '☀️' : isWind ? '💨' : '⚡'}
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-slate-900 truncate">
+                            {plant.name}
+                          </h4>
+                          <span className="text-[10px] text-slate-500 block">
+                            {Number(plant.capacity_mw).toLocaleString()} MW Capacity • Live {Number(genMW).toFixed(0)} MW
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectPlant && onSelectPlant(plant);
+                        }}
+                        className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors shrink-0 ml-1"
+                        title="Focus on map"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* Bottom Left: Comprehensive Plant & Grid Status Legend */}
-      <div className="absolute bottom-4 left-4 z-[400] bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/90 shadow-lg text-xs space-y-2 pointer-events-auto max-w-xs">
+      <div className="absolute bottom-4 left-4 z-[400] bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-slate-200/90 shadow-lg text-xs space-y-2 pointer-events-auto max-w-xs hidden sm:block">
         <div>
-          <span className="font-extrabold text-slate-900 block text-[11px] uppercase tracking-wider mb-1.5">
+          <span className="font-extrabold text-slate-900 block text-[11px] uppercase tracking-wider mb-1">
             Renewable Assets
           </span>
-          <div className="grid grid-cols-1 gap-1.5">
+          <div className="grid grid-cols-1 gap-1">
             <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] font-bold shadow-xs">
+              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold">
                 ☀️
               </span>
-              <span className="text-slate-700 font-medium">Solar Photovoltaic Farms</span>
+              <span className="text-slate-700 font-medium text-[11px]">Solar Photovoltaic Parks</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-teal-500 text-white text-[11px] font-bold shadow-xs">
+              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-teal-500 text-white text-[9px] font-bold">
                 💨
               </span>
-              <span className="text-slate-700 font-medium">Wind Turbine Generation Parks</span>
+              <span className="text-slate-700 font-medium text-[11px]">Wind Turbine Farms</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-500 text-white text-[11px] font-bold shadow-xs">
+              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-purple-500 text-white text-[9px] font-bold">
                 ⚡
               </span>
-              <span className="text-slate-700 font-medium">Hybrid Renewable Complexes</span>
+              <span className="text-slate-700 font-medium text-[11px]">Hybrid Complexes</span>
             </div>
           </div>
         </div>
 
-        <div className="pt-2 border-t border-slate-200/80">
-          <span className="font-bold text-slate-700 block text-[10px] uppercase tracking-wider mb-1">
-            Operational Health
+        <div className="pt-1.5 border-t border-slate-200/80">
+          <span className="font-bold text-slate-700 block text-[10px] uppercase tracking-wider mb-0.5">
+            Health Indicator
           </span>
-          <div className="flex items-center gap-3 text-[11px]">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs" />
+          <div className="flex items-center gap-2.5 text-[10px]">
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-slate-600">Normal</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs" />
-              <span className="text-slate-600">Warning / Curtail</span>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="text-slate-600">Warning</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs" />
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
               <span className="text-slate-600">Critical</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Leaflet Map */}
+      {/* Leaflet Map Container */}
       <MapContainer
         center={defaultCenter}
         zoom={defaultZoom}
@@ -317,10 +621,30 @@ export default function RenewableMap({
           maxZoom={currentBasemap.maxZoom}
         />
 
+        {/* Viewport tracking for real-time bounds and zoom updates */}
+        <MapEventsListener onViewportChange={setViewport} />
+
+        {/* Camera flight controller for plant, region, and state transitions */}
         <MapViewController 
           selectedPlant={selectedPlant} 
           selectedRegion={filters.region} 
+          selectedState={selectedState}
         />
+
+        {/* State Focus Highlight Beacon */}
+        {focusedStateGeo && (
+          <Circle
+            center={focusedStateGeo.center}
+            radius={220000}
+            pathOptions={{
+              color: '#059669',
+              fillColor: '#10b981',
+              fillOpacity: 0.08,
+              weight: 2,
+              dashArray: '6, 6'
+            }}
+          />
+        )}
 
         {/* 1. Regional Cluster Corridors Overlay */}
         {filters.showRegionalClusters && regionalClusters.map((cluster) => (
@@ -331,7 +655,7 @@ export default function RenewableMap({
             pathOptions={{
               color: cluster.color,
               fillColor: cluster.color,
-              fillOpacity: 0.07,
+              fillOpacity: 0.06,
               weight: 1.5,
               dashArray: '4, 8'
             }}
@@ -458,8 +782,8 @@ export default function RenewableMap({
                       <span className="font-bold text-slate-800">{cuf}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="font-medium text-slate-500">Grid Interconnection:</span>
-                      <span className="font-semibold text-slate-700">{plant.region?.name || plant.technology?.split(' ')[0] || 'Active 400kV'}</span>
+                      <span className="font-medium text-slate-500">Grid State / Region:</span>
+                      <span className="font-semibold text-slate-700">{plant.technology?.split(' ')[0] || 'Active 400kV'}</span>
                     </div>
                     {telemetry?.weather && (
                       <div className="flex justify-between items-center pt-0.5 border-t border-slate-200/60">

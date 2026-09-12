@@ -19,6 +19,7 @@ export default function MapFilterBar({
   onFilterChange,
   onResetFilters,
   regions = [],
+  states = [],
   stats = { totalCount: 0, totalCapacity: 0, liveOutput: 0, alertCount: 0 }
 }) {
   return (
@@ -57,7 +58,7 @@ export default function MapFilterBar({
         </div>
       </div>
 
-      {/* Filter Row 1: Type, Status, Region */}
+      {/* Filter Row 1: Type, Status, Region, State */}
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
         
         {/* Technology Type Filter */}
@@ -166,6 +167,23 @@ export default function MapFilterBar({
             {regions.map((r) => (
               <option key={r.id || r.code} value={r.code || r.name}>
                 {r.name} ({r.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* State Renewable Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500 font-medium hidden sm:inline">State:</span>
+          <select
+            value={filters.state || 'all'}
+            onChange={(e) => onFilterChange('state', e.target.value)}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+          >
+            <option value="all">All States</option>
+            {states.map((s) => (
+              <option key={s.id || s.code} value={s.code || s.name}>
+                {s.name} ({s.code})
               </option>
             ))}
           </select>

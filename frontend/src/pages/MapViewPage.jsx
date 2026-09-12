@@ -19,6 +19,7 @@ import { Badge } from '../components';
 import { 
   fetchPlants, 
   fetchRegions, 
+  fetchStates,
   fetchCurrentTelemetry, 
   fetchAlertsSummary,
   fetchFarmForecast 
@@ -27,6 +28,8 @@ import {
 export default function MapViewPage({ onSwitchToOverview }) {
   const [plants, setPlants] = useState([]);
   const [regions, setRegions] = useState([]);
+  const [states, setStates] = useState([]);
+  const [selectedState, setSelectedState] = useState(null);
   const [telemetry, setTelemetry] = useState(null);
   const [alertsSummary, setAlertsSummary] = useState(null);
   const [selectedPlant, setSelectedPlant] = useState(null);
@@ -39,6 +42,7 @@ export default function MapViewPage({ onSwitchToOverview }) {
     type: 'all',
     status: 'all',
     region: 'all',
+    state: 'all',
     minCapacity: 0,
     showHeatmap: true,
     showWeather: true,
@@ -49,15 +53,17 @@ export default function MapViewPage({ onSwitchToOverview }) {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [plantsData, regionsData, telemData, alertData] = await Promise.all([
+      const [plantsData, regionsData, statesData, telemData, alertData] = await Promise.all([
         fetchPlants(),
         fetchRegions(),
+        fetchStates(),
         fetchCurrentTelemetry(),
         fetchAlertsSummary()
       ]);
 
       setPlants(plantsData || []);
       setRegions(regionsData || []);
+      setStates(statesData || []);
       setTelemetry(telemData || null);
       setAlertsSummary(alertData || null);
       setLastUpdated(new Date());
@@ -123,6 +129,12 @@ export default function MapViewPage({ onSwitchToOverview }) {
       const matchRegion = regions.find(r => r.code === filters.region || r.name === filters.region);
       if (matchRegion && plant.region_id !== matchRegion.id) return false;
     }
+
+    // State filter
+    if (filters.state && filters.state !== 'all') {
+      const matchState = states.find(s => s.code === filters.state || s.name === filters.state || String(s.id) === String(filters.state));
+      if (matchState && plant.state_id !== matchState.id) return false;
+    }
     
     // Capacity filter
     if (plant.capacity_mw < filters.minCapacity) return false;
@@ -139,6 +151,9 @@ export default function MapViewPage({ onSwitchToOverview }) {
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+    if (key === 'state') {
+      setSelectedState(value === 'all' ? null : value);
+    }
   };
 
   const handleResetFilters = () => {
@@ -146,11 +161,13 @@ export default function MapViewPage({ onSwitchToOverview }) {
       type: 'all',
       status: 'all',
       region: 'all',
+      state: 'all',
       minCapacity: 0,
       showHeatmap: true,
       showWeather: true,
       showRegionalClusters: true
     });
+    setSelectedState(null);
   };
 
   return (
@@ -171,7 +188,7 @@ export default function MapViewPage({ onSwitchToOverview }) {
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 max-w-2xl">
-            Spatially visualize national renewable generation nodes, corridor power flows, regional balancing clusters, and atmospheric telemetry.
+            Spatially visualize national renewable generation nodes, corridor power flows, state-level solar & wind clusters, and atmospheric telemetry.
           </p>
         </div>
 
@@ -213,6 +230,7 @@ export default function MapViewPage({ onSwitchToOverview }) {
         onFilterChange={handleFilterChange}
         onResetFilters={handleResetFilters}
         regions={regions}
+        states={states}
         stats={{
           totalCount: filteredPlants.length,
           totalCapacity: Math.round(totalFilteredCapacity),
@@ -228,9 +246,16 @@ export default function MapViewPage({ onSwitchToOverview }) {
         <div className="flex-1 w-full min-w-0">
           <RenewableMap
             plants={filteredPlants}
+            allPlants={plants}
+            states={states}
             telemetryMap={telemetryMap}
             selectedPlant={selectedPlant}
+            selectedState={selectedState || (filters.state !== 'all' ? filters.state : null)}
             onSelectPlant={(plant) => setSelectedPlant(plant)}
+            onSelectState={(stateCode) => {
+              setSelectedState(stateCode);
+              handleFilterChange('state', stateCode || 'all');
+            }}
             filters={filters}
           />
         </div>
