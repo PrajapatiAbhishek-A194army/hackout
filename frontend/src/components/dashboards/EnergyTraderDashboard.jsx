@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -16,16 +16,62 @@ import {
   Flame
 } from 'lucide-react';
 import { MetricCard, Badge } from '../index';
+import { fetchNationalForecast } from '../../services/api';
 
 export default function EnergyTraderDashboard({ onOpenMap, user }) {
   const [tradeExecuted, setTradeExecuted] = useState(false);
+  const [nationalForecast, setNationalForecast] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const marketSpreads = [
-    { block: '09:00 - 11:00', mcpDam: '₹ 3.80', mcpRtm: '₹ 4.10', spread: '+₹ 0.30', signal: 'Buy DAM', corridor: 'NR → WR' },
-    { block: '11:00 - 14:00 (Solar Peak)', mcpDam: '₹ 2.40', mcpRtm: '₹ 2.10', spread: '-₹ 0.30', signal: 'Sell Solar / Charge', corridor: 'NR Surplus' },
-    { block: '14:00 - 17:00', mcpDam: '₹ 3.20', mcpRtm: '₹ 3.50', spread: '+₹ 0.30', signal: 'Bilateral Hold', corridor: 'WR → SR' },
-    { block: '18:00 - 21:30 (Evening Peak)', mcpDam: '₹ 7.90', mcpRtm: '₹ 8.50', spread: '+₹ 0.60', signal: 'Sell RTM Peakers', corridor: 'All Grids Tight' },
-  ];
+  useEffect(() => {
+    let isMounted = true;
+    fetchNationalForecast(24).then(data => {
+      if (isMounted) {
+        setNationalForecast(data);
+        setLoading(false);
+      }
+    }).catch(err => {
+      console.error('EnergyTraderDashboard error:', err);
+      if (isMounted) setLoading(false);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const middaySolarMw = nationalForecast?.installed_solar_mw
+    ? Math.round(nationalForecast.installed_solar_mw).toLocaleString()
+    : '14,200';
+
+  const atcCapacity = nationalForecast?.regional_summaries?.[0]?.total_capacity_mw
+    ? Math.round(nationalForecast.regional_summaries[0].total_capacity_mw * 0.4).toLocaleString()
+    : '3,420';
+
+  const marketSpreads = (nationalForecast?.forecast_points && nationalForecast.forecast_points.length > 0)
+    ? [
+        { block: '09:00 - 11:00', mcpDam: '₹ 3.80', mcpRtm: '₹ 4.10', spread: '+₹ 0.30', signal: 'Buy DAM', corridor: 'NR → WR' },
+        { 
+          block: '11:00 - 14:00 (Solar Peak)', 
+          mcpDam: '₹ 2.40', 
+          mcpRtm: '₹ 2.10', 
+          spread: '-₹ 0.30', 
+          signal: `Surplus (${middaySolarMw} MW)`, 
+          corridor: 'NR Export' 
+        },
+        { block: '14:00 - 17:00', mcpDam: '₹ 3.20', mcpRtm: '₹ 3.50', spread: '+₹ 0.30', signal: 'Bilateral Hold', corridor: 'WR → SR' },
+        { 
+          block: '18:00 - 21:30 (Evening Peak)', 
+          mcpDam: '₹ 7.90', 
+          mcpRtm: '₹ 8.50', 
+          spread: '+₹ 0.60', 
+          signal: 'Sell RTM Peakers', 
+          corridor: 'All Grids Tight' 
+        },
+      ]
+    : [
+        { block: '09:00 - 11:00', mcpDam: '₹ 3.80', mcpRtm: '₹ 4.10', spread: '+₹ 0.30', signal: 'Buy DAM', corridor: 'NR → WR' },
+        { block: '11:00 - 14:00 (Solar Peak)', mcpDam: '₹ 2.40', mcpRtm: '₹ 2.10', spread: '-₹ 0.30', signal: 'Sell Solar / Charge', corridor: 'NR Surplus' },
+        { block: '14:00 - 17:00', mcpDam: '₹ 3.20', mcpRtm: '₹ 3.50', spread: '+₹ 0.30', signal: 'Bilateral Hold', corridor: 'WR → SR' },
+        { block: '18:00 - 21:30 (Evening Peak)', mcpDam: '₹ 7.90', mcpRtm: '₹ 8.50', spread: '+₹ 0.60', signal: 'Sell RTM Peakers', corridor: 'All Grids Tight' },
+      ];
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -75,8 +121,8 @@ export default function EnergyTraderDashboard({ onOpenMap, user }) {
           badge={<Badge variant="surplus">Cheap Power</Badge>}
           icon={TrendingDown}
           iconBg="bg-purple-100 text-purple-800"
-          confidence="96%"
-          explain="Over 14,000 MW solar surplus in Rajasthan depresses midday DAM clearing prices to lower bound."
+          confidence={nationalForecast?.average_confidence ? Math.round(nationalForecast.average_confidence * 100) + '%' : "96%"}
+          explain={`Over ${middaySolarMw} MW solar surplus in Rajasthan depresses midday DAM clearing prices to lower bound.`}
         />
 
         <MetricCard
@@ -88,7 +134,7 @@ export default function EnergyTraderDashboard({ onOpenMap, user }) {
           badge={<Badge variant="critical" pulse>High Premium</Badge>}
           icon={Flame}
           iconBg="bg-rose-100 text-rose-700"
-          confidence="94%"
+          confidence={nationalForecast?.average_confidence ? Math.round(nationalForecast.average_confidence * 100) + '%' : "94%"}
           explain="Fast sunset ramp combined with high peak cooling demand pushes RTM bids close to the CERC price cap."
         />
 
@@ -107,14 +153,14 @@ export default function EnergyTraderDashboard({ onOpenMap, user }) {
 
         <MetricCard
           title="Export Corridor Headroom"
-          value="3,420"
+          value={atcCapacity}
           unit="MW ATC"
           subtitle="Northern to Western Corridor"
           trend={{ direction: 'neutral', value: '78% Cap', text: 'pre-congestion' }}
           badge={<Badge variant="warning">Monitor Limits</Badge>}
           icon={Zap}
           iconBg="bg-amber-100 text-amber-700"
-          confidence="93%"
+          confidence={nationalForecast?.average_confidence ? Math.round(nationalForecast.average_confidence * 100) + '%' : "93%"}
           explain="Available Transfer Capability (ATC) between NR and WR will congest by 13:30 IST without early bilateral booking."
         />
       </div>

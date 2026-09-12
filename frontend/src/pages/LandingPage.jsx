@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Zap, 
   Sun, 
@@ -32,58 +32,86 @@ import {
   Badge, 
   ForecastHorizonSelector 
 } from '../components';
+import { 
+  fetchNationalForecast, 
+  fetchAlertsSummary, 
+  fetchCurrentTelemetry 
+} from '../services/api';
 
 export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backendHealth, onOpenAuthModal }) {
   const [horizon, setHorizon] = useState('24h');
   const [selectedRoleTab, setSelectedRoleTab] = useState(activeRole || 'grid-operator');
+  const [nationalForecast, setNationalForecast] = useState(null);
+  const [alertsSummary, setAlertsSummary] = useState(null);
+  const [telemetry, setTelemetry] = useState(null);
+  const [loadingMetrics, setLoadingMetrics] = useState(true);
 
-  // Multi-horizon reactive metric simulations
-  const horizonMetrics = {
-    '24h': {
-      totalMW: '48,650',
-      solarMW: '31,200',
-      windMW: '17,450',
-      solarPct: 64,
-      windPct: 36,
-      confidence: '94%',
-      confStatus: 'High Reliability',
-      activeAlerts: 3,
-      criticalCount: 1,
-      warningCount: 2,
-      peakHour: '13:00 IST',
-      curtailmentRisk: 'Low (1.2%)'
-    },
-    '48h': {
-      totalMW: '94,180',
-      solarMW: '59,800',
-      windMW: '34,380',
-      solarPct: 63,
-      windPct: 37,
-      confidence: '86%',
-      confStatus: 'Moderate-High',
-      activeAlerts: 7,
-      criticalCount: 2,
-      warningCount: 5,
-      peakHour: 'Tomorrow 13:30 IST',
-      curtailmentRisk: 'Medium (3.8%)'
-    },
-    '72h': {
-      totalMW: '138,420',
-      solarMW: '87,600',
-      windMW: '50,820',
-      solarPct: 63,
-      windPct: 37,
-      confidence: '78%',
-      confStatus: 'Weather Variance',
-      activeAlerts: 11,
-      criticalCount: 4,
-      warningCount: 7,
-      peakHour: 'Day 3 12:45 IST',
-      curtailmentRisk: 'Elevated (5.4%)'
-    }
+  const horizonHours = parseInt(horizon.replace('h', ''), 10) || 24;
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadTelemetry = async () => {
+      setLoadingMetrics(true);
+      try {
+        const [natData, alertData, telemData] = await Promise.all([
+          fetchNationalForecast(horizonHours),
+          fetchAlertsSummary(),
+          fetchCurrentTelemetry()
+        ]);
+        if (isMounted) {
+          setNationalForecast(natData);
+          setAlertsSummary(alertData);
+          setTelemetry(telemData);
+        }
+      } catch (err) {
+        console.error('Failed to load landing metrics from API:', err);
+      } finally {
+        if (isMounted) setLoadingMetrics(false);
+      }
+    };
+
+    loadTelemetry();
+    return () => { isMounted = false; };
+  }, [horizonHours]);
+
+  const totalGenMw = nationalForecast?.national_peak_mw 
+    ? Math.round(nationalForecast.national_peak_mw).toLocaleString()
+    : (telemetry?.grid?.total_renewable_generation_mw ? Math.round(telemetry.grid.total_renewable_generation_mw).toLocaleString() : '48,650');
+
+  const solarPct = nationalForecast?.solar_contribution_pct ? Math.round(nationalForecast.solar_contribution_pct) : 64;
+  const windPct = nationalForecast?.wind_contribution_pct ? Math.round(nationalForecast.wind_contribution_pct) : 36;
+
+  const solarMw = nationalForecast?.installed_solar_mw
+    ? Math.round(nationalForecast.installed_solar_mw * (solarPct / 100)).toLocaleString()
+    : (telemetry?.grid?.solar_generation_mw ? Math.round(telemetry.grid.solar_generation_mw).toLocaleString() : '31,200');
+
+  const windMw = nationalForecast?.installed_wind_mw
+    ? Math.round(nationalForecast.installed_wind_mw * (windPct / 100)).toLocaleString()
+    : (telemetry?.grid?.wind_generation_mw ? Math.round(telemetry.grid.wind_generation_mw).toLocaleString() : '17,450');
+
+  const confidenceScore = nationalForecast?.average_confidence
+    ? Math.round(nationalForecast.average_confidence * 100) + '%'
+    : '94%';
+
+  const activeAlertsCount = alertsSummary?.total_active_alerts ?? 3;
+  const criticalCount = alertsSummary?.critical_alerts ?? 1;
+  const warningCount = alertsSummary?.warning_alerts ?? 2;
+  const curtailmentRisk = nationalForecast?.grid_balancing_risk || 'Low (1.2%)';
+  const farmNodesCount = nationalForecast?.active_plants_count || 124;
+
+  const metrics = {
+    totalMW: totalGenMw,
+    solarMW: solarMw,
+    windMW: windMw,
+    solarPct: solarPct,
+    windPct: windPct,
+    confidence: confidenceScore,
+    activeAlerts: activeAlertsCount,
+    criticalCount: criticalCount,
+    warningCount: warningCount,
+    curtailmentRisk: curtailmentRisk,
+    nodesCount: farmNodesCount
   };
-
-  const metrics = horizonMetrics[horizon];
 
   // Operational Roles Definition
   const roleDetails = {
@@ -255,7 +283,7 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
             icon={Zap}
             iconBg="bg-emerald-100 text-emerald-700"
             confidence={metrics.confidence}
-            explain="Synthesized from 124 farm nodes across 5 regional balancing grids."
+            explain={`Synthesized from ${metrics.nodesCount} farm nodes across 5 regional balancing grids.`}
           />
 
           {/* Card 2: Solar Generation */}
@@ -268,7 +296,7 @@ export default function LandingPage({ activeRole, onSelectRole, onOpenMap, backe
             badge={<Badge variant="solar">Solar XGBoost</Badge>}
             icon={Sun}
             iconBg="bg-amber-100 text-amber-700"
-            confidence="96%"
+            confidence={metrics.confidence}
             explain="Driven by GHI, cloud cover < 15%, and temperature-adjusted inverter efficiency."
           />
 

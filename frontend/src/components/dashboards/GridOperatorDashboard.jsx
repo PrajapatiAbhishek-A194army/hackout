@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Zap, 
   ShieldAlert, 
@@ -17,17 +17,87 @@ import {
   Cpu
 } from 'lucide-react';
 import { MetricCard, Badge } from '../index';
+import { 
+  fetchNationalForecast, 
+  fetchAlertsSummary, 
+  fetchCurrentTelemetry 
+} from '../../services/api';
 
 export default function GridOperatorDashboard({ onOpenMap, user }) {
   const [reserveState, setReserveState] = useState({ dispatched: false, mw: 12000 });
+  const [nationalForecast, setNationalForecast] = useState(null);
+  const [alertsSummary, setAlertsSummary] = useState(null);
+  const [telemetry, setTelemetry] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const regions = [
-    { name: 'Northern Region (NR)', gen: '18,420 MW', solar: '14,200 MW', wind: '4,220 MW', status: 'Optimal', load: '68%' },
-    { name: 'Western Region (WR)', gen: '16,840 MW', solar: '8,400 MW', wind: '8,440 MW', status: 'Optimal', load: '72%' },
-    { name: 'Southern Region (SR)', gen: '10,210 MW', solar: '6,100 MW', wind: '4,110 MW', status: 'Warning', load: '89%' },
-    { name: 'Eastern Region (ER)', gen: '2,180 MW', solar: '1,900 MW', wind: '280 MW', status: 'Optimal', load: '54%' },
-    { name: 'North-Eastern (NER)', gen: '1,000 MW', solar: '600 MW', wind: '400 MW', status: 'Optimal', load: '41%' },
-  ];
+  useEffect(() => {
+    let isMounted = true;
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [natData, alertData, telemData] = await Promise.all([
+          fetchNationalForecast(24),
+          fetchAlertsSummary(),
+          fetchCurrentTelemetry()
+        ]);
+        if (isMounted) {
+          setNationalForecast(natData);
+          setAlertsSummary(alertData);
+          setTelemetry(telemData);
+          if (natData?.max_hourly_ramp_mw) {
+            setReserveState(prev => ({ ...prev, mw: Math.round(natData.max_hourly_ramp_mw * 0.7) }));
+          }
+        }
+      } catch (err) {
+        console.error('GridOperatorDashboard API error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    loadData();
+    const interval = setInterval(loadData, 20000);
+    return () => { isMounted = false; clearInterval(interval); };
+  }, []);
+
+  // Compute live dynamic metrics
+  const allIndiaGen = nationalForecast?.national_peak_mw
+    ? Math.round(nationalForecast.national_peak_mw).toLocaleString()
+    : (telemetry?.grid?.total_renewable_generation_mw ? Math.round(telemetry.grid.total_renewable_generation_mw).toLocaleString() : '48,650');
+
+  const rampMw = nationalForecast?.max_hourly_ramp_mw
+    ? `-${Math.round(nationalForecast.max_hourly_ramp_mw).toLocaleString()}`
+    : '-18,400';
+
+  const reservesNeededMw = reserveState.mw || 12000;
+  const curtailmentRiskVal = nationalForecast?.grid_balancing_risk || 'Low (1.2%)';
+  const confidenceScore = nationalForecast?.average_confidence
+    ? Math.round(nationalForecast.average_confidence * 100) + '%'
+    : '94%';
+  const farmNodesCount = nationalForecast?.active_plants_count || telemetry?.total_active_plants || 124;
+
+  // Process live regional summaries from national forecast API
+  const regions = (nationalForecast?.regional_summaries && nationalForecast.regional_summaries.length > 0)
+    ? nationalForecast.regional_summaries.map(r => {
+        const totalMw = r.peak_mw || r.total_capacity_mw || 0;
+        const solarMw = r.solar_total_mwh ? Math.round(r.solar_total_mwh / 24) : Math.round(totalMw * 0.65);
+        const windMw = r.wind_total_mwh ? Math.round(r.wind_total_mwh / 24) : Math.round(totalMw * 0.35);
+        const loadPct = Math.min(95, Math.max(40, Math.round((totalMw / (r.total_capacity_mw || totalMw || 1)) * 100)));
+        return {
+          name: `${r.region_name || r.region_code} (${r.region_code})`,
+          gen: `${Math.round(totalMw).toLocaleString()} MW`,
+          solar: `${solarMw.toLocaleString()} MW`,
+          wind: `${windMw.toLocaleString()} MW`,
+          status: loadPct > 80 ? 'Warning' : 'Optimal',
+          load: `${loadPct}%`
+        };
+      })
+    : [
+        { name: 'Northern Region (NR)', gen: '18,420 MW', solar: '14,200 MW', wind: '4,220 MW', status: 'Optimal', load: '68%' },
+        { name: 'Western Region (WR)', gen: '16,840 MW', solar: '8,400 MW', wind: '8,440 MW', status: 'Optimal', load: '72%' },
+        { name: 'Southern Region (SR)', gen: '10,210 MW', solar: '6,100 MW', wind: '4,110 MW', status: 'Warning', load: '89%' },
+        { name: 'Eastern Region (ER)', gen: '2,180 MW', solar: '1,900 MW', wind: '280 MW', status: 'Optimal', load: '54%' },
+        { name: 'North-Eastern (NER)', gen: '1,000 MW', solar: '600 MW', wind: '400 MW', status: 'Optimal', load: '41%' },
+      ];
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -70,53 +140,53 @@ export default function GridOperatorDashboard({ onOpenMap, user }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <MetricCard
           title="All-India Generation"
-          value="48,650"
+          value={allIndiaGen}
           unit="MW"
-          subtitle="Aggregated across 124 farm nodes"
+          subtitle={`Aggregated across ${farmNodesCount} farm nodes`}
           trend={{ direction: 'up', value: '+8.4%', text: 'vs 24h baseline' }}
           badge={<Badge variant="normal">Grid Stable</Badge>}
           icon={Zap}
           iconBg="bg-emerald-100 text-emerald-700"
-          confidence="94%"
+          confidence={confidenceScore}
           explain="Synthesized bottom-up from individual farm XGBoost predictors across 5 regional balancing grids."
         />
 
         <MetricCard
           title="Critical Sunset Ramp"
-          value="-18,400"
+          value={rampMw}
           unit="MW / 90m"
           subtitle="Window: 17:00 – 18:30 IST"
           trend={{ direction: 'down', value: 'High Stress', text: 'steep duck curve' }}
           badge={<Badge variant="critical" pulse>Ramp Alert</Badge>}
           icon={TrendingDown}
           iconBg="bg-rose-100 text-rose-700"
-          confidence="96%"
-          explain="Solar generation falls from 31,200 MW to 0 MW while evening lighting demand ramps upward."
+          confidence={confidenceScore}
+          explain="Solar generation falls from midday peak to 0 MW while evening lighting demand ramps upward."
         />
 
         <MetricCard
           title="Required Spinning Reserves"
-          value={reserveState.dispatched ? "Dispatched" : "12,000"}
+          value={reserveState.dispatched ? "Dispatched" : reservesNeededMw.toLocaleString()}
           unit={reserveState.dispatched ? "" : "MW"}
           subtitle="Thermal & Pumped-Hydro Buffer"
           trend={{ direction: 'neutral', value: 'Pre-Alert', text: 'SLDC dispatch' }}
           badge={<Badge variant={reserveState.dispatched ? "normal" : "warning"}>{reserveState.dispatched ? "Active" : "Pending"}</Badge>}
           icon={Sliders}
           iconBg="bg-amber-100 text-amber-700"
-          confidence="92%"
+          confidence={confidenceScore}
           explain="Mandatory fast-ramping contingency required to maintain nominal 50.00 Hz frequency during solar ramp-down."
         />
 
         <MetricCard
           title="Curtailment Directives"
-          value="1.2%"
+          value={curtailmentRiskVal}
           unit="National"
-          subtitle="Low system curtailment risk"
+          subtitle="System curtailment assessment"
           trend={{ direction: 'neutral', value: 'Nominal', text: 'safe margin' }}
           badge={<Badge variant="normal">Optimal</Badge>}
           icon={CheckCircle2}
           iconBg="bg-teal-100 text-teal-700"
-          confidence="95%"
+          confidence={confidenceScore}
           explain="Inter-regional transmission corridors operating below thermal limits with no immediate spill directives required."
         />
       </div>

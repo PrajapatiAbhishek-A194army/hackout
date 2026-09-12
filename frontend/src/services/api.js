@@ -147,6 +147,39 @@ export async function fetchCurrentUserProfile(token) {
   return await res.json();
 }
 
+export async function fetchPlantWeather(plantId, limit = 24) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/weather/${plantId}?limit=${limit}`);
+    if (!res.ok) throw new Error(`Failed to fetch plant weather: ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error(`fetchPlantWeather error for ${plantId}:`, err);
+    return [];
+  }
+}
+
+export async function fetchRegionalForecast(regionIdOrCode, horizonHours = 24) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/aggregate/region/${regionIdOrCode}?horizon_hours=${horizonHours}`);
+    if (!res.ok) throw new Error(`Failed to fetch regional forecast: ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error(`fetchRegionalForecast error for ${regionIdOrCode}:`, err);
+    return null;
+  }
+}
+
+export async function fetchGridHierarchy() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/aggregate/hierarchy`);
+    if (!res.ok) throw new Error(`Failed to fetch grid hierarchy: ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error('fetchGridHierarchy error:', err);
+    return null;
+  }
+}
+
 export default {
   checkBackendHealth,
   fetchPlants,
@@ -157,6 +190,9 @@ export default {
   fetchAlertsSummary,
   fetchFarmForecast,
   fetchNationalForecast,
+  fetchPlantWeather,
+  fetchRegionalForecast,
+  fetchGridHierarchy,
   loginUser,
   signupUser,
   fetchCurrentUserProfile

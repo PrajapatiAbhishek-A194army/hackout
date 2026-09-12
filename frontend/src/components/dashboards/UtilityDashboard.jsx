@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   TrendingUp, 
@@ -14,19 +14,80 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { MetricCard, Badge } from '../index';
+import { fetchNationalForecast, fetchCurrentTelemetry } from '../../services/api';
 
 export default function UtilityDashboard({ onOpenMap, user }) {
   const [bessScheduled, setBessScheduled] = useState(false);
   const [bidSubmitted, setBidSubmitted] = useState(false);
+  const [nationalForecast, setNationalForecast] = useState(null);
+  const [telemetry, setTelemetry] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const hourlyBalance = [
-    { hour: '08:00', demand: 18500, reGen: 14200, netDemand: 4300, status: 'Balanced' },
-    { hour: '11:00', demand: 21000, reGen: 26400, netDemand: -5400, status: 'Surplus (BESS Charge)' },
-    { hour: '13:00', demand: 22400, reGen: 31200, netDemand: -8800, status: 'Surplus (BESS Charge)' },
-    { hour: '16:00', demand: 23100, reGen: 18600, netDemand: 4500, status: 'Tightening' },
-    { hour: '18:30', demand: 25800, reGen: 7200, netDemand: 18600, status: 'Deficit (Procure DAM)' },
-    { hour: '20:00', demand: 26400, reGen: 4100, netDemand: 22300, status: 'Peak Deficit' },
-  ];
+  useEffect(() => {
+    let isMounted = true;
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [natData, telemData] = await Promise.all([
+          fetchNationalForecast(24),
+          fetchCurrentTelemetry()
+        ]);
+        if (isMounted) {
+          setNationalForecast(natData);
+          setTelemetry(telemData);
+        }
+      } catch (err) {
+        console.error('UtilityDashboard API error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    loadData();
+    const interval = setInterval(loadData, 25000);
+    return () => { isMounted = false; clearInterval(interval); };
+  }, []);
+
+  const reMixPct = nationalForecast?.solar_contribution_pct
+    ? `${Math.round(nationalForecast.solar_contribution_pct + (nationalForecast.wind_contribution_pct || 0))}%`
+    : '41.2%';
+
+  const procurementGapMw = nationalForecast?.max_hourly_ramp_mw
+    ? Math.round(nationalForecast.max_hourly_ramp_mw * 0.22)
+    : 3850;
+
+  const bessCapacityMwh = nationalForecast?.installed_solar_mw
+    ? Math.round(nationalForecast.installed_solar_mw * 0.25)
+    : 2400;
+
+  const hourlyBalance = (nationalForecast?.forecast_points && nationalForecast.forecast_points.length > 0)
+    ? nationalForecast.forecast_points.filter((_, idx) => idx % 4 === 0 || idx === 18).slice(0, 6).map(pt => {
+        const d = new Date(pt.timestamp);
+        const hourStr = !isNaN(d.getTime()) ? `${d.getHours().toString().padStart(2, '0')}:00` : '12:00';
+        const reGen = Math.round(pt.predicted_mw);
+        const h = !isNaN(d.getTime()) ? d.getHours() : 12;
+        const baseDemand = Math.round(19000 + Math.sin((h - 8) / 12 * Math.PI) * 7000);
+        const netDemand = baseDemand - reGen;
+        let status = 'Balanced';
+        if (netDemand < -2000) status = 'Surplus (BESS Charge)';
+        else if (netDemand > 12000) status = 'Peak Deficit';
+        else if (netDemand > 4000) status = 'Deficit (Procure DAM)';
+        else status = 'Tightening';
+        return {
+          hour: hourStr,
+          demand: baseDemand,
+          reGen: reGen,
+          netDemand: netDemand,
+          status: status
+        };
+      })
+    : [
+        { hour: '08:00', demand: 18500, reGen: 14200, netDemand: 4300, status: 'Balanced' },
+        { hour: '11:00', demand: 21000, reGen: 26400, netDemand: -5400, status: 'Surplus (BESS Charge)' },
+        { hour: '13:00', demand: 22400, reGen: 31200, netDemand: -8800, status: 'Surplus (BESS Charge)' },
+        { hour: '16:00', demand: 23100, reGen: 18600, netDemand: 4500, status: 'Tightening' },
+        { hour: '18:30', demand: 25800, reGen: 7200, netDemand: 18600, status: 'Deficit (Procure DAM)' },
+        { hour: '20:00', demand: 26400, reGen: 4100, netDemand: 22300, status: 'Peak Deficit' },
+      ];
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -69,20 +130,20 @@ export default function UtilityDashboard({ onOpenMap, user }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <MetricCard
           title="Renewable Supply Share"
-          value="41.2%"
+          value={reMixPct}
           unit="Mix"
           subtitle="Of total licensed territory load"
           trend={{ direction: 'up', value: '+4.5%', text: 'vs seasonal average' }}
           badge={<Badge variant="normal">High Green Mix</Badge>}
           icon={PieChart}
           iconBg="bg-amber-100 text-amber-800"
-          confidence="95%"
+          confidence={nationalForecast?.average_confidence ? Math.round(nationalForecast.average_confidence * 100) + '%' : "95%"}
           explain="Driven by high irradiance across state solar parks reducing daytime thermal power purchase cost."
         />
 
         <MetricCard
           title="Evening Procurement Gap"
-          value={bidSubmitted ? "Covered" : "3,850"}
+          value={bidSubmitted ? "Covered" : procurementGapMw.toLocaleString()}
           unit={bidSubmitted ? "" : "MW"}
           subtitle="Shortfall window: 18:00 - 22:00 IST"
           trend={{ direction: 'down', value: 'Critical Gap', text: 'post-sunset deficit' }}
@@ -91,13 +152,13 @@ export default function UtilityDashboard({ onOpenMap, user }) {
           </Badge>}
           icon={AlertTriangle}
           iconBg="bg-rose-100 text-rose-700"
-          confidence="93%"
+          confidence={nationalForecast?.average_confidence ? Math.round(nationalForecast.average_confidence * 100) + '%' : "93%"}
           explain="Solar output ceases while household cooling and commercial peak demand coincide."
         />
 
         <MetricCard
           title="BESS Storage Absorption"
-          value={bessScheduled ? "Scheduled" : "2,400"}
+          value={bessScheduled ? "Scheduled" : bessCapacityMwh.toLocaleString()}
           unit={bessScheduled ? "" : "MWh"}
           subtitle="Midday charging opportunity"
           trend={{ direction: 'up', value: '11:00-14:00', text: 'solar surplus' }}
