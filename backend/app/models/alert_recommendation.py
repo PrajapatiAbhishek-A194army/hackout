@@ -15,8 +15,15 @@ class Alert(Base, TimestampMixin):
     start_time = Column(DateTime(timezone=True), nullable=False, index=True)
     end_time = Column(DateTime(timezone=True), nullable=False)
     delta_mw = Column(Float, nullable=True) # MW excess, deficit, or ramp delta
-    status = Column(String(20), default="active", nullable=False) # 'active', 'acknowledged', 'resolved'
+    status = Column(String(20), default="active", nullable=False) # 'active', 'acknowledged', 'resolved', 'suppressed'
     confidence = Column(Float, default=0.85, nullable=False)
+
+    # Acknowledgment & Resolution tracking
+    acknowledged_by = Column(String(100), nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    ack_notes = Column(Text, nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolution_notes = Column(Text, nullable=True)
 
     # Relationships
     plant = relationship("Plant", back_populates="alerts")

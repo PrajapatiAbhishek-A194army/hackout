@@ -13,7 +13,11 @@ from app.schemas.region_state import StateBase, StateResponse, RegionBase, Regio
 from app.schemas.plant import PlantBase, PlantCreate, PlantUpdate, PlantResponse, PlantDetailResponse
 from app.schemas.weather import WeatherBase, WeatherCreate, WeatherResponse
 from app.schemas.forecast import ForecastPoint, FarmForecastResponse, AggregatedForecastResponse, NationalForecastResponse, HierarchicalTreeResponse
-from app.schemas.alert import RecommendationResponse, AlertResponse, AlertStatsResponse
+from app.schemas.alert import (
+    RecommendationResponse, AlertResponse, AlertStatsResponse,
+    AlertAcknowledgeRequest, AlertResolveRequest, AlertSuppressRequest,
+    NotificationDispatchReceipt, AlertScanResult
+)
 
 __all__ = [
     "HealthResponse",
@@ -37,4 +41,9 @@ __all__ = [
     "RecommendationResponse",
     "AlertResponse",
     "AlertStatsResponse",
+    "AlertAcknowledgeRequest",
+    "AlertResolveRequest",
+    "AlertSuppressRequest",
+    "NotificationDispatchReceipt",
+    "AlertScanResult",
 ]
